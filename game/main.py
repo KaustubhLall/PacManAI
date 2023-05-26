@@ -31,7 +31,7 @@ def main(maze_file='./mazes/1.txt', pacman_lives=3, ghost_difficulty=0, manual_m
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Pacman game')
-    parser.add_argument('--maze-file', type=str, default='./mazes/1.txt', help='maze file path')
+    parser.add_argument('--maze-file', type=str, default='../mazes/2.txt', help='maze file path')
     parser.add_argument('--pacman-lives', type=int, default=3, help='number of lives for Pacman')
     parser.add_argument('--ghost-difficulty', type=int, default=0, help='difficulty level for ghosts')
     parser.add_argument('--manual-mode', type=bool, default=True, help='enable manual mode')

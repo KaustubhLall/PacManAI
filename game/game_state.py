@@ -1,5 +1,6 @@
 '''game_state.py'''
 import warnings
+
 from game.entities import Pacman, Ghost, Pellet
 
 
@@ -49,3 +50,23 @@ class GameState:
 
     def remove_pellet(self, pellet):
         self.pellets.remove(pellet)
+
+    def get_encoding(self):
+        encoded_board = []
+
+        for row in self.board:
+            encoded_row = []
+            for cell in row:
+                if cell == ' ':
+                    encoded_row.append([1, 0, 0, 0, 0])  # Empty cell
+                elif cell == '#':
+                    encoded_row.append([0, 1, 0, 0, 0])  # Wall
+                elif cell == '.':
+                    encoded_row.append([0, 0, 1, 0, 0])  # Pellet
+                elif cell == 'P':
+                    encoded_row.append([0, 0, 0, 1, 0])  # Pacman
+                elif cell == 'G':
+                    encoded_row.append([0, 0, 0, 0, 1])  # Ghost
+            encoded_board.append(encoded_row)
+
+        return encoded_board

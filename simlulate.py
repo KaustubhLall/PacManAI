@@ -3,7 +3,7 @@ from game.game_state import GameState
 
 
 def ai(game_state):
-    # Placeholder AI function
+    # Placeholder AI function - goes right always
     return 1, 0
 
 
@@ -45,7 +45,7 @@ def print_board(gamestate):
     return emoji_board_str
 
 
-def simulate(maze_file='./mazes/1.txt', pacman_lives=1, ghost_difficulty=3, verbose=True, prefix=''):
+def simulate(maze_file='./mazes/2.txt', pacman_lives=1, ghost_difficulty=3, verbose=True, prefix=''):
     game_state = GameState(maze_file, pacman_lives, ghost_difficulty)
     game_logic = GameLogic(game_state)
 
@@ -65,6 +65,7 @@ def simulate(maze_file='./mazes/1.txt', pacman_lives=1, ghost_difficulty=3, verb
             print('CONVERGED')
             return game_state.pacman.score * 10, game_state.pacman.lives * 1000
         if verbose: print(prefix + f"Move - ({dx}, {dy})\n---------\nBoard:\n{print_board(game_state)}")
+        print(game_state.get_encoding())
 
 
 if __name__ == "__main__":

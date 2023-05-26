@@ -1,0 +1,5 @@
+[NEAT]
+fitness_criterion = max
+fitness_threshold = 100000
+population_size = 1000
+reset_on_extinction = True
