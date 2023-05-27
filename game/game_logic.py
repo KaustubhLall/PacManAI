@@ -132,3 +132,16 @@ class GameLogic:
         if self.game_state.board[y][x] == '#':
             return False
         return True
+
+    def perform_action(self, action):
+        if action == 0:  # Up
+            self.move_pacman(0, -1)
+        elif action == 1:  # Down
+            self.move_pacman(0, 1)
+        elif action == 2:  # Left
+            self.move_pacman(-1, 0)
+        elif action == 3:  # Right
+            self.move_pacman(1, 0)
+
+    def get_game_state(self):
+        return self.game_state

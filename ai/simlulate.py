@@ -1,5 +1,5 @@
 from game.game_logic import GameLogic
-from game.game_state import GameState
+from game.game_state import GameState, print_board
 
 
 def ai(game_state):
@@ -12,37 +12,6 @@ def print_board_basic(gamestate):
         print(''.join(row))
 
 
-def print_board(gamestate):
-    # Create a copy of the board matrix
-    board_copy = [row.copy() for row in gamestate.board]
-
-    # Place entities on the board
-    board_copy[gamestate.pacman.y][gamestate.pacman.x] = '😮'  # Pacman
-
-    for pellet in gamestate.pellets:
-        board_copy[pellet.y][pellet.x] = '🍚'  # Pellets
-
-    for ghost in gamestate.ghosts:
-        board_copy[ghost.y][ghost.x] = '👻'  # Ghosts
-
-    # Translate the maze symbols to emojis
-    emoji_board = []
-    for row in board_copy:
-        emoji_row = []
-        for cell in row:
-            if cell == ' ':
-                emoji_row.append('⬛')
-            elif cell == '#':
-                emoji_row.append('🟦')
-            elif cell == '.':
-                emoji_row.append('⬛')  # Replacing consumed pellets with empty space
-            else:
-                emoji_row.append(cell)
-        emoji_board.append(emoji_row)
-
-    # Convert the emoji board to a string
-    emoji_board_str = '\n'.join([' '.join(row) for row in emoji_board])
-    return emoji_board_str
 
 
 def simulate(maze_file='./mazes/2.txt', pacman_lives=1, ghost_difficulty=3, verbose=True, prefix=''):

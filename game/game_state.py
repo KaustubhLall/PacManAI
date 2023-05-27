@@ -1,6 +1,8 @@
 '''game_state.py'''
 import warnings
 
+import numpy as np
+
 from game.entities import Pacman, Ghost, Pellet
 
 
@@ -9,9 +11,12 @@ class GameState:
         self.pacman = None
         self.ghosts = []
         self.pellets = []
+        self.lives = pacman_lives
+        self.ghost_difficulty = ghost_difficulty
         self.load_from_file(filename, pacman_lives, ghost_difficulty)
 
     def load_from_file(self, filename, pacman_lives, ghost_difficulty):
+        self.filename = filename
         with open(filename, 'r') as file:
             lines = file.readlines()
 
@@ -52,21 +57,67 @@ class GameState:
         self.pellets.remove(pellet)
 
     def get_encoding(self):
-        encoded_board = []
+        encoded_board = np.zeros((self.board_height, self.board_width, 5))
 
-        for row in self.board:
-            encoded_row = []
-            for cell in row:
+        for y, row in enumerate(self.board):
+            for x, cell in enumerate(row):
                 if cell == ' ':
-                    encoded_row.append([1, 0, 0, 0, 0])  # Empty cell
+                    encoded_board[y, x, 0] = 1  # Empty cell
                 elif cell == '#':
-                    encoded_row.append([0, 1, 0, 0, 0])  # Wall
+                    encoded_board[y, x, 1] = 1  # Wall
                 elif cell == '.':
-                    encoded_row.append([0, 0, 1, 0, 0])  # Pellet
+                    encoded_board[y, x, 2] = 1  # Pellet
                 elif cell == 'P':
-                    encoded_row.append([0, 0, 0, 1, 0])  # Pacman
+                    encoded_board[y, x, 3] = 1  # Pacman
                 elif cell == 'G':
-                    encoded_row.append([0, 0, 0, 0, 1])  # Ghost
-            encoded_board.append(encoded_row)
+                    encoded_board[y, x, 4] = 1  # Ghost
 
         return encoded_board
+
+    def get_board(self):
+        return np.array(self.board)
+
+    def reset(self):
+        self.load_from_file(self.filename, self.lives, self.ghost_difficulty)
+
+    def is_game_over(self):
+        return self.pacman.lives <= 0
+
+    def get_current_state(self):
+        return self.get_encoding()
+
+    def get_score(self):
+        return self.pacman.score
+
+
+def print_board(gamestate):
+    # Create a copy of the board matrix
+    board_copy = [row.copy() for row in gamestate.board]
+
+    # Place entities on the board
+    board_copy[gamestate.pacman.y][gamestate.pacman.x] = '😮'  # Pacman
+
+    for pellet in gamestate.pellets:
+        board_copy[pellet.y][pellet.x] = '🍚'  # Pellets
+
+    for ghost in gamestate.ghosts:
+        board_copy[ghost.y][ghost.x] = '👻'  # Ghosts
+
+    # Translate the maze symbols to emojis
+    emoji_board = []
+    for row in board_copy:
+        emoji_row = []
+        for cell in row:
+            if cell == ' ':
+                emoji_row.append('⬛')
+            elif cell == '#':
+                emoji_row.append('🟦')
+            elif cell == '.':
+                emoji_row.append('⬛')  # Replacing consumed pellets with empty space
+            else:
+                emoji_row.append(cell)
+        emoji_board.append(emoji_row)
+
+    # Convert the emoji board to a string
+    emoji_board_str = '\n'.join([' '.join(row) for row in emoji_board])
+    return emoji_board_str
