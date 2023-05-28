@@ -14,7 +14,7 @@ def print_board_basic(gamestate):
 
 
 
-def simulate(maze_file='./mazes/2.txt', pacman_lives=1, ghost_difficulty=3, verbose=True, prefix=''):
+def simulate(maze_file='../mazes/2.txt', pacman_lives=1, ghost_difficulty=3, verbose=True, prefix=''):
     game_state = GameState(maze_file, pacman_lives, ghost_difficulty)
     game_logic = GameLogic(game_state)
 

@@ -1,6 +1,8 @@
 import tfne
 from absl import app, flags, logging
 
+from ai.environments.pacmanEnv import PacmanCoDeepNEATEnv
+
 flags.DEFINE_integer('logging_level',
                      default=None, help='Integer parameter specifying the verbosity of the absl logging library')
 flags.DEFINE_string('config_file',
@@ -19,9 +21,9 @@ flags.DEFINE_float('max_fitness',
 
 def runCoDeepNEAT(_,
                   max_fitness=None,
-                  config_file_path='./cifar-10-example.cfg',
+                  config_file_path='./pacman-simple.cfg',
                   backup_dir_path='./tfne_state_backups/',
-                  max_generations=4,
+                  max_generations=72,
                   epochs_tuning=200, ):
     """
     This Example evolves a CoDeepNEAT population on the CIFAR10 dataset for 72 generations. Subsequently the best
@@ -47,7 +49,7 @@ def runCoDeepNEAT(_,
     config = tfne.parse_configuration(config_file_path)
 
     # Initialize the environment and the specific NE algorithm
-    environment = tfne.environments.CIFAR10Environment(weight_training=True, config=config, verbosity=logging.WARN)
+    environment = PacmanCoDeepNEATEnv(game_map='../mazes/2.txt', ghost_difficulty=3, pacman_lives=3, weight_training=True, config=config, verbosity=logging.WARN)
     ne_algorithm = tfne.algorithms.CoDeepNEAT(config)
 
     # Initialize evolution engine and supply config as well as initialized NE algorithm and evaluation environment.

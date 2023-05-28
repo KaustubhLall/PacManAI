@@ -67,12 +67,13 @@ class PacmanCoDeepNEATEnv(BaseEnvironment):
 
     def replay_genome(self, genome):
         print("Replaying Genome #{}:".format(genome.get_id()))
+        model = genome.get_model()
+
         self.reset()
         state = self.game_state.get_current_state()
         done = False
         total_reward = 0
         while not done:
-            model = genome.get_model()
             prediction = model.predict(np.array([state]))
             action_index = np.argmax(prediction)
             action = self.actions[action_index]
@@ -81,6 +82,12 @@ class PacmanCoDeepNEATEnv(BaseEnvironment):
             state = next_state
 
         print("Achieved Fitness:\t{}\n".format(total_reward))
+
+    def get_input_shape(self):
+        return 32, 32
+
+    def get_output_shape(self) -> (int,):
+        return (5,)
 
     def duplicate(self):
         return PacmanCoDeepNEATEnv(self.game_state.filename, self.game_state.lives,
