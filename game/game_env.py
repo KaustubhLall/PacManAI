@@ -21,3 +21,4 @@ class PacmanEnv:
 
     def render(self):
         print(print_board(self.game_state))
+

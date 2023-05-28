@@ -57,20 +57,20 @@ class GameState:
         self.pellets.remove(pellet)
 
     def get_encoding(self):
-        encoded_board = np.zeros((self.board_height, self.board_width, 5))
+        encoded_board = np.zeros((self.board_height, self.board_width))
 
         for y, row in enumerate(self.board):
             for x, cell in enumerate(row):
                 if cell == ' ':
-                    encoded_board[y, x, 0] = 1  # Empty cell
+                    encoded_board[y, x] = 0  # Empty cell
                 elif cell == '#':
-                    encoded_board[y, x, 1] = 1  # Wall
+                    encoded_board[y, x] = 1  # Wall
                 elif cell == '.':
-                    encoded_board[y, x, 2] = 1  # Pellet
+                    encoded_board[y, x] = 2  # Pellet
                 elif cell == 'P':
-                    encoded_board[y, x, 3] = 1  # Pacman
+                    encoded_board[y, x] = 3  # Pacman
                 elif cell == 'G':
-                    encoded_board[y, x, 4] = 1  # Ghost
+                    encoded_board[y, x] = 4  # Ghost
 
         return encoded_board
 
