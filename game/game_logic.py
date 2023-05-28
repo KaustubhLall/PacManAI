@@ -4,6 +4,8 @@ from random import choice
 
 import numpy as np
 
+from game.game_state import print_board
+
 
 class GameLogic:
     def __init__(self, game_state):

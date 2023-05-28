@@ -72,7 +72,7 @@ class GameState:
                 elif cell == 'G':
                     encoded_board[y, x] = 4  # Ghost
 
-        return encoded_board
+        return encoded_board.reshape(1024)
 
     def get_board(self):
         return np.array(self.board)

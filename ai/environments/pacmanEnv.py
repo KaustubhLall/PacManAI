@@ -30,7 +30,7 @@ class PacmanCoDeepNEATEnv(BaseEnvironment):
             raise NotImplementedError("Pacman environment non-weight training evaluation not yet implemented")
 
         self.accuracy_metric = tf.keras.metrics.Accuracy()
-        self.actions = [(0, 0), (0, 1), (0, -1), (1, 0), (-1, 0)]  # possible actions
+        self.actions = [(-1, 0), (0, 0), (0, 1), (0, -1), (1, 0), ]  # possible actions
 
     def reset(self):
         self.game_state.reset()
@@ -49,12 +49,13 @@ class PacmanCoDeepNEATEnv(BaseEnvironment):
         model = genome.get_model()
         optimizer = genome.get_optimizer()
 
-        model.compile(optimizer=optimizer, loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True))
+        # model.compile(optimizer=optimizer, loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False))
 
         self.reset()
         state = self.game_state.get_current_state()
         done = False
         total_reward = 0
+        i = 0
         while not done:
             prediction = model.predict(np.expand_dims(state, axis=0))
             action_index = np.argmax(prediction)
@@ -62,6 +63,8 @@ class PacmanCoDeepNEATEnv(BaseEnvironment):
             next_state, reward, done = self.step(action)
             total_reward += reward
             state = next_state
+            print(f'Iter: {i} reward: {reward}')
+            i += 1
 
         return total_reward
 
