@@ -1,6 +1,5 @@
 '''game_logic.py'''
 from collections import deque
-from random import shuffle
 
 import numpy as np
 
@@ -116,74 +115,85 @@ class GameLogic:
         elif ghost.difficulty == 1:
             return self.alg_drunkard_walk_next_move(ghost)  # randomly moving ghost
         elif ghost.difficulty == 2:
-            return self.alg_second_best_bfs_next_move(ghost)  # dfs-based ghost
+            return self.alg_dfs(ghost)  # dfs-based ghost
         elif ghost.difficulty == 3:
-            path = self.alg_bfs((ghost.x, ghost.y), (self.game_state.pacman.x, self.game_state.pacman.y))
-            if path:
-                return path[0]
+            return self.alg_a_star(ghost)
         return 0, 0  # default, does not move
 
-    def alg_bfs(self, start, target):
+    def get_next_moves(self, x, y):
+        directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]  # right, down, left, up
+        next_moves = []
+
+        for dx, dy in directions:
+            next_x, next_y = x + dx, y + dy
+            if self._is_valid_cell(next_x, next_y):
+                next_moves.append((dx, dy))
+
+        return next_moves
+
+    def alg_dfs(self, ghost, max_depth=10):
+        stack = [(ghost.x, ghost.y, 0)]  # store nodes with their depth
         visited = np.zeros((self.game_state.board_height, self.game_state.board_width))
-        queue = deque([start])
+        paths = {(ghost.x, ghost.y): []}
+        fallback_path = None  # Added fallback_path to store a valid path
+
+        while stack:
+            x, y, depth = stack[-1]  # Check the top of the stack without popping
+
+            if (x, y) == (self.game_state.pacman.x, self.game_state.pacman.y):
+                return paths[(x, y)][0] if paths[(x, y)] else (0, 0)  # return first step or stay still
+
+            if visited[y][x] == 0 and depth <= max_depth:
+                visited[y][x] = 1
+                stack.pop()  # Now pop the node since it's visited
+
+                for dx, dy in self.get_next_moves(x, y):
+                    next_x, next_y = x + dx, y + dy
+                    if visited[next_y][next_x] == 0:
+                        stack.append((next_x, next_y, depth + 1))
+                        paths[(next_x, next_y)] = paths[(x, y)] + [(dx, dy)]
+
+                        # Store the first valid move as a fallback path
+                        if fallback_path is None:
+                            fallback_path = paths[(next_x, next_y)][0]
+            else:
+                stack.pop()  # Pop the node if it is visited or the depth is exceeded
+
+        # If DFS didn't find a path within max_depth, return the fallback_path
+        if fallback_path is not None:
+            return fallback_path
+
+        raise ValueError("No valid path found in DFS")
+
+    def alg_a_star(self, ghost):
+        start = (ghost.x, ghost.y)
+        target = (self.game_state.pacman.x, self.game_state.pacman.y)
+        visited = np.zeros((self.game_state.board_height, self.game_state.board_width))
+        queue = [(0, start)]  # store nodes with their priorities
         paths = {start: []}
 
         while queue:
-            x, y = queue.popleft()
+            priority, (x, y) = min(queue)  # Check node with lowest priority
+            queue.remove((priority, (x, y)))  # Remove this node from queue
 
             if (x, y) == target:
-                return paths[(x, y)]
+                return paths[(x, y)][0] if paths[(x, y)] else (0, 0)  # return first step or stay still
 
             if visited[y][x] == 0:
                 visited[y][x] = 1
 
-                for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]:
+                for dx, dy in self.get_next_moves(x, y):
                     next_x, next_y = x + dx, y + dy
-
-                    if self._is_valid_cell(next_x, next_y) and visited[next_y][next_x] == 0:
-                        queue.append((next_x, next_y))
+                    if visited[next_y][next_x] == 0:
+                        new_priority = priority + 1 + _heuristic((next_x, next_y), target)
+                        queue.append((new_priority, (next_x, next_y)))
                         paths[(next_x, next_y)] = paths[(x, y)] + [(dx, dy)]
 
-        return None
-
-    def alg_second_best_bfs_next_move(self, ghost):
-        visited = np.zeros((self.game_state.board_height, self.game_state.board_width))
-        queue = deque([(ghost.x, ghost.y)])
-        paths = {(ghost.x, ghost.y): []}
-        target = (self.game_state.pacman.x, self.game_state.pacman.y)
-
-        while queue:
-            x, y = queue.popleft()
-
-            if (x, y) == target:
-                # If more than one path, return the second best
-                if len(paths[(x, y)]) > 1:
-                    return paths[(x, y)][1]
-                # If only one path, return the best
-                elif len(paths[(x, y)]) > 0:
-                    return paths[(x, y)][0]
-                else:
-                    return 1, 0  # default, does not move
-
-            if visited[y][x] == 0:
-                visited[y][x] = 1
-
-                for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]:  # right, down, left, up
-                    next_x, next_y = x + dx, y + dy
-
-                    if self._is_valid_cell(next_x, next_y) and visited[next_y][next_x] == 0:
-                        queue.append((next_x, next_y))
-                        paths[(next_x, next_y)] = paths[(x, y)] + [(dx, dy)]
-
-        return 1, 0  # default, does not move
+        raise ValueError("No valid path found in A*")
 
     def alg_drunkard_walk_next_move(self, ghost):
-        directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]  # right, down, left, up
-        shuffle(directions)  # randomize the order of directions
-
-        for dx, dy in directions:
-            next_x, next_y = ghost.x + dx, ghost.y + dy
-            if self._is_valid_cell(next_x, next_y) and not self._is_collision_with_ghosts(next_x, next_y):
-                return dx, dy  # return the first valid and random direction
-
-        return 0, 0  # default, does not move
+        directions = self.get_next_moves(ghost.x, ghost.y)
+        if directions:
+            return directions[np.random.choice(len(directions))]  # randomly pick a valid direction
+        else:
+            return (0, 0)  # stay still if no valid direction is found
