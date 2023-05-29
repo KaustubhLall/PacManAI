@@ -5,21 +5,21 @@ from datetime import datetime
 from ai.environments.deepql_env import DQNAgent, PacmanEnv
 
 # Define the directories for checkpoints and replays
-CHECKPOINT_DIR = './DQL_checkpoints'
-REPLAY_DIR = './DQL_replays'
+CHECKPOINT_DIR = './DQL/checkpoints'
+REPLAY_DIR = './DQL/replays'
 EPISODES = 1000
 
 # Make the directories if they do not exist
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 os.makedirs(REPLAY_DIR, exist_ok=True)
 
-actions = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]
+actions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 grid_height = 32
 grid_width = 32
 num_channels = 5
-num_extra_features = 4
+num_extra_features = 5
 agent = DQNAgent((grid_height, grid_width), num_channels, num_extra_features, actions)
-batch_size = 4
+batch_size = 16
 env = PacmanEnv('../mazes/1.txt', pacman_lives=3, ghost_difficulty=3)
 high_score = 0
 file_prefix = 'pacmanDQL'
