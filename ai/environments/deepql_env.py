@@ -61,32 +61,12 @@ class DQNAgent:
         self.epsilon = 1.0  # Exploration rate
         self.epsilon_min = 0.01
         self.epsilon_decay = 0.995
-        self.model = self._build_model_DQN()
+        self.model = self._build_model()
 
         if load is not None:
             self.load(load)
+
     def _build_model(self):
-        grid_input = Input(shape=(self.grid_size[0], self.grid_size[1], self.num_channels))
-        conv = Conv2D(8, kernel_size=3, activation='relu')(grid_input)
-        conv = Conv2D(16, kernel_size=3, activation='relu')(conv)
-        conv = Conv2D(32, kernel_size=3, activation='relu')(conv)
-        flat = Flatten()(conv)
-
-        extra_input = Input(shape=(self.num_extra_features,))
-        concat = Concatenate()([flat, extra_input])
-
-        hidden = Dense(256, activation='relu')(concat)
-        hidden = Dense(128, activation='relu')(hidden)
-        hidden = Dense(64, activation='relu')(hidden)
-        hidden = Dense(32, activation='relu')(hidden)
-
-        output = Dense(self.action_size, activation='linear')(hidden)
-
-        model = Model(inputs=[grid_input, extra_input], outputs=output)
-        model.compile(optimizer=RMSProp(), loss='mse')
-        return model
-
-    def _build_model_DQN(self):
         # Input layers
         grid_input = Input(shape=(self.grid_size[0], self.grid_size[1], self.num_channels))
         extra_input = Input(shape=(self.num_extra_features,))

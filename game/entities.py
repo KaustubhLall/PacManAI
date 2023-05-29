@@ -1,8 +1,14 @@
 '''entities.py'''
+
+
 class Entity:
     def __init__(self, x, y):
         self.x = x
         self.y = y
+
+    def move(self, dx, dy):
+        self.x += dx
+        self.y += dy
 
 
 class Pacman(Entity):
@@ -11,12 +17,8 @@ class Pacman(Entity):
         self.score = 0
         self.lives = lives
 
-    def move(self, dx, dy):
-        self.x += dx
-        self.y += dy
 
-
-class Ghost:
+class Ghost(Entity):
     def __init__(self, x, y, difficulty=0):
         self.x = x
         self.y = y

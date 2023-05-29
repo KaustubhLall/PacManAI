@@ -1,5 +1,5 @@
 '''game_logic.py'''
-from collections import deque
+from random import choice
 
 import numpy as np
 
@@ -33,15 +33,15 @@ class GameLogic:
         if pacman_dx == 0 and pacman_dy == 0:
             pacman_dx, pacman_dy = self.default_dx, self.default_dy
 
-        next_x = self.game_state.pacman.x + pacman_dx
-        next_y = self.game_state.pacman.y + pacman_dy
+        next_x = (self.game_state.pacman.x + pacman_dx) % self.game_state.board_width
+        next_y = (self.game_state.pacman.y + pacman_dy) % self.game_state.board_height
 
         # If new move is invalid, use the default move
         if not self._is_valid_cell(next_x, next_y):
             pacman_dx, pacman_dy = self.default_dx, self.default_dy
 
-        next_x = self.game_state.pacman.x + pacman_dx
-        next_y = self.game_state.pacman.y + pacman_dy
+        next_x = (self.game_state.pacman.x + pacman_dx) % self.game_state.board_width
+        next_y = (self.game_state.pacman.y + pacman_dy) % self.game_state.board_height
 
         # If the default move is invalid, stand still
         if not self._is_valid_cell(next_x, next_y):
@@ -54,15 +54,20 @@ class GameLogic:
         return self.game_state
 
     # logic helpers
+    # in GameLogic
     def _move_pacman(self, dx, dy):
-        next_x = self.game_state.pacman.x + dx
-        next_y = self.game_state.pacman.y + dy
+        next_x = (self.game_state.pacman.x + dx) % self.game_state.board_width
+        next_y = (self.game_state.pacman.y + dy) % self.game_state.board_height
 
         # Check if next cell is valid and not a wall
         if self._is_valid_cell(next_x, next_y):
             # Update the default direction with the current move direction
             self.default_dx, self.default_dy = dx, dy
             self.game_state.pacman.move(dx, dy)
+
+            # Wrap Pacman's coordinates
+            self.game_state.pacman.x = next_x
+            self.game_state.pacman.y = next_y
 
             # Check for pellet collision
             for pellet in self.game_state.pellets:
@@ -80,17 +85,26 @@ class GameLogic:
     def _move_ghosts(self):
         for ghost in self.game_state.ghosts:
             dx, dy = self._ghost_next_move(ghost)
-            next_x, next_y = ghost.x + dx, ghost.y + dy
+            next_x = (ghost.x + dx) % self.game_state.board_width
+            next_y = (ghost.y + dy) % self.game_state.board_height
 
             # Check for collision with walls and other ghosts
             if not self._is_valid_cell(next_x, next_y) or self._is_collision_with_ghosts(next_x, next_y):
                 continue
 
-            ghost.x += dx
-            ghost.y += dy
+            ghost.move(dx, dy)
+
+            # Wrap Ghost's coordinates
+            ghost.x = next_x
+            ghost.y = next_y
+
             self._check_ghost_collision(ghost)
 
     def _is_collision_with_ghosts(self, x, y):
+        # Wrap coordinates
+        x = x % self.game_state.board_width
+        y = y % self.game_state.board_height
+
         for ghost in self.game_state.ghosts:
             if x == ghost.x and y == ghost.y:
                 return True
@@ -102,8 +116,10 @@ class GameLogic:
             ghost.x, ghost.y = ghost.start_x, ghost.start_y  # move ghost back to starting position
 
     def _is_valid_cell(self, x, y):
-        if x < 0 or y < 0 or x >= self.game_state.board_width or y >= self.game_state.board_height:
-            return False
+        # Wrap coordinates
+        x = x % self.game_state.board_width
+        y = y % self.game_state.board_height
+
         if self.game_state.board[y][x] == '#':
             return False
         return True
@@ -113,9 +129,9 @@ class GameLogic:
         if ghost.difficulty == 0:
             return 0, 0  # static ghost, does not move
         elif ghost.difficulty == 1:
-            return self.alg_drunkard_walk_next_move(ghost)  # randomly moving ghost
+            return self.alg_dbfs(ghost)  # randomly moving ghost
         elif ghost.difficulty == 2:
-            return self.alg_dfs(ghost)  # dfs-based ghost
+            return self.alg_dfs(ghost, max_depth=15)  # dfs-based ghost
         elif ghost.difficulty == 3:
             return self.alg_a_star(ghost)
         return 0, 0  # default, does not move
@@ -125,7 +141,7 @@ class GameLogic:
         next_moves = []
 
         for dx, dy in directions:
-            next_x, next_y = x + dx, y + dy
+            next_x, next_y = (x + dx) % self.game_state.board_width, (y + dy) % self.game_state.board_height
             if self._is_valid_cell(next_x, next_y):
                 next_moves.append((dx, dy))
 
@@ -139,6 +155,7 @@ class GameLogic:
 
         while stack:
             x, y, depth = stack[-1]  # Check the top of the stack without popping
+            x, y = x % self.game_state.board_width, y % self.game_state.board_height  # Wrap coordinates
 
             if (x, y) == (self.game_state.pacman.x, self.game_state.pacman.y):
                 return paths[(x, y)][0] if paths[(x, y)] else (0, 0)  # return first step or stay still
@@ -148,7 +165,7 @@ class GameLogic:
                 stack.pop()  # Now pop the node since it's visited
 
                 for dx, dy in self.get_next_moves(x, y):
-                    next_x, next_y = x + dx, y + dy
+                    next_x, next_y = (x + dx) % self.game_state.board_width, (y + dy) % self.game_state.board_height
                     if visited[next_y][next_x] == 0:
                         stack.append((next_x, next_y, depth + 1))
                         paths[(next_x, next_y)] = paths[(x, y)] + [(dx, dy)]
@@ -174,6 +191,7 @@ class GameLogic:
 
         while queue:
             priority, (x, y) = min(queue)  # Check node with lowest priority
+            x, y = x % self.game_state.board_width, y % self.game_state.board_height  # Wrap coordinates
             queue.remove((priority, (x, y)))  # Remove this node from queue
 
             if (x, y) == target:
@@ -183,7 +201,7 @@ class GameLogic:
                 visited[y][x] = 1
 
                 for dx, dy in self.get_next_moves(x, y):
-                    next_x, next_y = x + dx, y + dy
+                    next_x, next_y = (x + dx) % self.game_state.board_width, (y + dy) % self.game_state.board_height
                     if visited[next_y][next_x] == 0:
                         new_priority = priority + 1 + _heuristic((next_x, next_y), target)
                         queue.append((new_priority, (next_x, next_y)))
@@ -191,9 +209,29 @@ class GameLogic:
 
         raise ValueError("No valid path found in A*")
 
-    def alg_drunkard_walk_next_move(self, ghost):
-        directions = self.get_next_moves(ghost.x, ghost.y)
-        if directions:
-            return directions[np.random.choice(len(directions))]  # randomly pick a valid direction
-        else:
-            return (0, 0)  # stay still if no valid direction is found
+    def alg_dbfs(self, ghost):
+        # Get pacman's position
+        pacman_x, pacman_y = self.game_state.pacman.x, self.game_state.pacman.y
+
+        # Check current direction towards pacman
+        direction = (np.sign(pacman_x - ghost.x), np.sign(pacman_y - ghost.y))
+
+        # Get valid moves
+        moves = self.get_next_moves(ghost.x, ghost.y)
+
+        # If the ghost has no possible moves, it should remain stationary
+        if len(moves) == 0:
+            return 0, 0
+
+        # If the ghost's current direction towards pacman is a valid move, choose it
+        if direction in moves:
+            return direction
+
+        # Otherwise, try a move perpendicular to the preferred direction
+        perpendicular_moves = [(direction[1], direction[0]), (-direction[1], -direction[0])]
+        for move in perpendicular_moves:
+            if move in moves:
+                return move
+
+        # If neither the preferred nor perpendicular directions are available, choose a valid random move
+        return choice(moves)
