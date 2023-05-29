@@ -64,7 +64,7 @@ class GameLogic:
                 visited[y][x] = 1
                 # Add all unvisited neighbors to the stack
                 # Sort directions based on the heuristic
-                directions.sort(key=lambda d: self.heuristic((x + d[0], y + d[1]), pacman), reverse=True)
+                directions.sort(key=lambda d: self.heuristic((x + d[0], y + d[1]), pacman))
                 for dx, dy in directions:
                     next_x, next_y = x + dx, y + dy
                     if self.is_valid_cell(next_x, next_y) and visited[next_y][next_x] == 0:
@@ -134,16 +134,6 @@ class GameLogic:
         if self.game_state.board[y][x] == '#':
             return False
         return True
-
-    def perform_action(self, action):
-        if action == 0:  # Up
-            self.move_pacman(0, -1)
-        elif action == 1:  # Down
-            self.move_pacman(0, 1)
-        elif action == 2:  # Left
-            self.move_pacman(-1, 0)
-        elif action == 3:  # Right
-            self.move_pacman(1, 0)
 
     def get_game_state(self):
         return self.game_state

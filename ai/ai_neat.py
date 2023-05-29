@@ -22,7 +22,7 @@ def ic(fitness, lives):
 def eval_genome(args):
     genome_id, genome, config = args
     net = FeedForwardNetwork.create(genome, config)
-    game_state = GameState('../mazes/1.txt', 1, 3)
+    game_state = GameState('../mazes/1.txt', pacman_lives=3, ghost_difficulty=3)
     game_logic = GameLogic(game_state)
     actions = [(0, 0), (1, 0), (0, 1), (-1, 0), (0, -1)]  # Actions corresponding to stay, right, up, left, down
 
@@ -39,10 +39,11 @@ def eval_genome(args):
         lives = game_state.pacman.lives
         # print(f"fitness, lives = {fitness, lives}")
         if game_state.pacman.lives <= 0:
-            # print(f'ended game with:\n {print_board(game_state)}')
-            return fitness - 25
+            print(f'{genome_id} ENDED game with:\n {print_board(game_state)}')
+            return fitness
 
         if len(game_state.pellets) == 0:
+            print(f'{genome_id} WON game with:\n {print_board(game_state)}')
             return fitness + lives * 10
 
 

@@ -1,7 +1,7 @@
 import tfne
 from absl import app, flags, logging
 
-from ai.environments.pacmanEnv import PacmanCoDeepNEATEnv
+from ai.environments.codeepneat_env import PacmanCoDeepNEATEnv
 
 flags.DEFINE_integer('logging_level',
                      default=None, help='Integer parameter specifying the verbosity of the absl logging library')
