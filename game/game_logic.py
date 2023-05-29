@@ -5,6 +5,24 @@ from random import shuffle
 import numpy as np
 
 
+def _heuristic(cell, target, metric="manhattan"):
+    dx = abs(target[0] - cell[0])
+    dy = abs(target[1] - cell[1])
+
+    if metric == "manhattan":
+        return dx + dy
+    elif metric == "euclidean":
+        return (dx ** 2 + dy ** 2) ** 0.5
+    elif metric == "chebyshev":
+        return max(dx, dy)
+    elif metric == "octile":
+        return max(dx, dy) + 0.414 * min(dx, dy)
+    elif metric == "euclidean_squared":
+        return dx ** 2 + dy ** 2
+    else:
+        raise ValueError("Invalid metric: " + metric)
+
+
 class GameLogic:
     # public interface
     def __init__(self, game_state):
@@ -59,10 +77,6 @@ class GameLogic:
                 if next_x == ghost.x and next_y == ghost.y:
                     self.game_state.pacman.lives -= 1
                     break
-
-    def _heuristic(self, cell, target):
-        # Manhattan distance
-        return abs(target[0] - cell[0]) + abs(target[1] - cell[1])
 
     def _move_ghosts(self):
         for ghost in self.game_state.ghosts:
