@@ -41,7 +41,7 @@ class PacmanEnv:
         return np.array([self.game_state.pacman.x, self.game_state.pacman.y, closest_ghost.x, closest_ghost.y])
 
     def render(self):
-        print_board(self.game_state)
+        return print_board(self.game_state)
 
 
 class DQNAgent:
