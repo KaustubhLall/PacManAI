@@ -24,7 +24,7 @@ class PacmanEnv:
     def step(self, action):
         self.game_logic.update(*action)
         current_score = self.game_state.get_score()
-        reward = (current_score - self.prev_score) - (self.pacman_lives - self.game_state.pacman.lives) * 0 - 0.1
+        reward = (2 if (current_score - self.prev_score) else -0.1) - ((self.pacman_lives - self.game_state.pacman.lives) * 50)
         self.prev_score = current_score
         done = self.game_state.is_game_over()
         next_state = self.game_state.get_encoding_ql()
