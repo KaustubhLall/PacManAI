@@ -4,7 +4,7 @@ from ai.environments.deepql_env import PacmanEnv
 
 # Load the replay data
 # Replace with your replay file below
-replay_file = 'C:/Users/kaus/PycharmProjects/PacManAI/ai/DQL/replays/pacmanDQL - 2023-05-30/score-19 -replay.pkl'
+replay_file = 'C:/Users/kaus/PycharmProjects/PacManAI/ai/DQL/replays/pacmanDQL - 2023-05-30/score-33 -replay.pkl'
 with open(replay_file, 'rb') as f:
     replay_states, replay_actions = pickle.load(f)
 

@@ -23,7 +23,7 @@ num_channels = 5
 num_extra_features = 6
 agent = DQNAgent((grid_height, grid_width), num_channels, num_extra_features, actions,)
 # agent.load('C:/Users/kaus/PycharmProjects/PacManAI/ai/DQL/checkpoints/pacmanDQL - 2023-05-29/score-38')
-batch_size = 64
+batch_size = 32
 env = PacmanEnv('../mazes/1.txt', pacman_lives=3, ghost_difficulty=3)
 high_score = 0
 file_prefix = 'pacmanDQL'
