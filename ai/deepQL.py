@@ -1,16 +1,16 @@
 import os
 import pickle
 from datetime import datetime
-import numpy as np
-from tqdm import tqdm
-from ai.environments.deepql_env import DQNAgent, PacmanEnv
 
+from tqdm import tqdm
+
+from ai.environments.deepql_env import DQNAgent, PacmanEnv
 
 # Define the directories for checkpoints and replays
 CHECKPOINT_DIR = './DQL/checkpoints'
 REPLAY_DIR = './DQL/replays'
 EPISODES = 10000
-TARGET_UPDATE_INTERVAL = 10
+TARGET_UPDATE_INTERVAL = 5
 CHECKPOINT_INTERVAL = 100
 
 # Make the directories if they do not exist
@@ -22,9 +22,9 @@ grid_height = 31
 grid_width = 28
 num_channels = 5
 num_extra_features = 6
-agent = DQNAgent((grid_height, grid_width), num_channels, num_extra_features, actions,)
+agent = DQNAgent((grid_height, grid_width), num_channels, num_extra_features, actions, )
 # agent.load('C:/Users/kaus/PycharmProjects/PacManAI/ai/DQL/checkpoints/pacmanDQL - 2023-05-29/score-38')
-batch_size = 32
+batch_size = 1
 env = PacmanEnv('../mazes/1.txt', pacman_lives=3, ghost_difficulty=3)
 high_score = 0
 file_prefix = 'pacmanDQL'
@@ -50,7 +50,7 @@ for e in range(EPISODES):
             score = env.game_state.get_score()
             chk = e % CHECKPOINT_INTERVAL == 0
             if score > high_score or chk:
-                high_score = score
+                high_score = score if score > high_score else high_score
                 timestamp = datetime.now().strftime(f'{file_prefix} - %Y-%m-%d')
                 checkpoint_dir = os.path.join(CHECKPOINT_DIR, timestamp)
                 os.makedirs(checkpoint_dir, exist_ok=True)

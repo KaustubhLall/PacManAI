@@ -19,6 +19,64 @@ MAX_GHOST_PENALTY = 1  # This value might need to be adjusted based on your obse
 
 # todo implement double Q-learning
 # todo switch to prioritized experience replay
+
+class SumTree:
+    write = 0
+
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.tree = np.zeros(2 * capacity - 1)
+        self.data = np.zeros(capacity, dtype=object)
+
+    def _propagate(self, idx, change):
+        parent = (idx - 1) // 2
+
+        self.tree[parent] += change
+
+        if parent != 0:
+            self._propagate(parent, change)
+
+    def _retrieve(self, idx, s):
+        left = 2 * idx + 1
+        right = left + 1
+
+        if left >= len(self.tree):
+            return idx
+
+        if s <= self.tree[left]:
+            return self._retrieve(left, s)
+        else:
+            return self._retrieve(right, s - self.tree[left])
+
+    def total(self):
+        return self.tree[0]
+
+    def add(self, p, data):
+        idx = self.write + self.capacity - 1
+
+        self.data[self.write] = data
+        self.update(idx, p)
+
+        self.write += 1
+        if self.write >= self.capacity:
+            self.write = 0
+
+    def update(self, idx, p):
+        change = p - self.tree[idx]
+
+        self.tree[idx] = p
+        self._propagate(idx, change)
+
+    def get(self, s):
+        idx = self._retrieve(0, s)
+        dataIdx = idx - self.capacity + 1
+
+        return (idx, self.tree[idx], self.data[dataIdx])
+
+    def __len__(self):
+        return len(self.data)
+
+
 class PacmanEnv:
     def __init__(self, filename, pacman_lives, ghost_difficulty):
         self.filename = filename
@@ -28,7 +86,7 @@ class PacmanEnv:
         self.game_logic = None
         self.prev_score = 0
         self.reset()
-        self.ghost_distance_threshold = 20
+        self.ghost_distance_threshold = 10
         self.pellet_distance_threshold = 10
         self.prev_lives = pacman_lives
 
@@ -107,63 +165,6 @@ class PacmanEnv:
                + print_board(self.game_state)
 
 
-class SumTree:
-    write = 0
-
-    def __init__(self, capacity):
-        self.capacity = capacity
-        self.tree = np.zeros(2 * capacity - 1)
-        self.data = np.zeros(capacity, dtype=object)
-
-    def _propagate(self, idx, change):
-        parent = (idx - 1) // 2
-
-        self.tree[parent] += change
-
-        if parent != 0:
-            self._propagate(parent, change)
-
-    def _retrieve(self, idx, s):
-        left = 2 * idx + 1
-        right = left + 1
-
-        if left >= len(self.tree):
-            return idx
-
-        if s <= self.tree[left]:
-            return self._retrieve(left, s)
-        else:
-            return self._retrieve(right, s - self.tree[left])
-
-    def total(self):
-        return self.tree[0]
-
-    def add(self, p, data):
-        idx = self.write + self.capacity - 1
-
-        self.data[self.write] = data
-        self.update(idx, p)
-
-        self.write += 1
-        if self.write >= self.capacity:
-            self.write = 0
-
-    def update(self, idx, p):
-        change = p - self.tree[idx]
-
-        self.tree[idx] = p
-        self._propagate(idx, change)
-
-    def get(self, s):
-        idx = self._retrieve(0, s)
-        dataIdx = idx - self.capacity + 1
-
-        return (idx, self.tree[idx], self.data[dataIdx])
-
-    def __len__(self):
-        return len(self.data)
-
-
 class DQNAgent:
     def __init__(self, grid_size, num_channels, num_extra_features, actions, load=None):
         self.grid_size = grid_size
@@ -177,7 +178,7 @@ class DQNAgent:
         self.gamma = 0.95  # Discount factor
         self.epsilon = 1.0  # Exploration rate
         self.epsilon_min = 0.2  # 0.01 default
-        self.epsilon_decay = 0.995
+        self.epsilon_decay = 0.999
         self.lr = 1e-4
         self.absolute_error_upper = 1.
 
