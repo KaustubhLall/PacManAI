@@ -11,6 +11,9 @@ from keras.optimizers import Nadam
 from game.game_logic import GameLogic
 from game.game_state import GameState, print_board
 
+EPSILON = 1e-5  # small constant to prevent division by zero
+MAX_GHOST_PENALTY = 1  # This value might need to be adjusted based on your observations
+
 
 # todo implement double Q-learning
 # todo switch to prioritized experience replay
@@ -23,16 +26,54 @@ class PacmanEnv:
         self.game_logic = None
         self.prev_score = 0
         self.reset()
-
+        self.ghost_distance_threshold = 20
+        self.pellet_distance_threshold = 10
+        self.prev_lives = pacman_lives
     def step(self, action):
         self.game_logic.update(*action)
         current_score = self.game_state.get_score()
-        reward = (1 if (current_score - self.prev_score) else -0.01) - (
-                (self.pacman_lives - self.game_state.pacman.lives) * -2)
+        current_lives = self.game_state.pacman.lives
+
+        # Calculate each reward component
+        score_reward = (1 if (current_score - self.prev_score) else 0)
+
+        if self.prev_lives > current_lives:  # if a life was lost
+            lives_penalty = ((self.prev_lives - current_lives) * -1)
+        else:
+            lives_penalty = 0
+
+        pellet_distance = abs(self.closest_pellet.x - self.game_state.pacman.x) + abs(
+            self.closest_pellet.y - self.game_state.pacman.y)
+        pellet_reward = 1 - pellet_distance / self.pellet_distance_threshold  # Scales from 0 to 1 as distance decreases
+
+        ghost_penalty = 0
+        for ghost in self.game_state.ghosts:
+            distance = abs(self.game_state.pacman.x - ghost.x) + abs(self.game_state.pacman.y - ghost.y)
+            if distance < self.ghost_distance_threshold:
+                # Calculate penalty as a scaled logarithmic function
+                penalty = np.log(self.ghost_distance_threshold) - np.log(distance + EPSILON)
+                penalty = penalty / np.log(self.ghost_distance_threshold)  # Normalize to 0-1 range
+                ghost_penalty -= penalty  # Subtract penalty to introduce the danger of ghosts
+
+        # Combine rewards
+        reward = ghost_penalty + pellet_reward + lives_penalty
+        # print(f'score_reward :{score_reward:4.2f}, lives_penalty :{lives_penalty:4.2f}, ghost_penalty :'
+        #     f'{ghost_penalty:4.2f}, pellet_reward :{pellet_reward:4.2f}, total : {reward:4.2f}')
+
+        reward_info = {
+            'score_reward': score_reward,
+            'ghost_penalty': ghost_penalty,
+            'pellet_reward': pellet_reward,
+            'lives_penalty': lives_penalty,
+            'total_reward': reward
+        }
+
         self.prev_score = current_score
+        self.prev_lives = current_lives
+
         done = self.game_state.is_game_over()
         next_state = self.game_state.get_encoding_ql()
-        return (next_state, self._get_extra_features()), reward, done
+        return (next_state, self._get_extra_features()), reward, done, reward_info
 
     def reset(self):
         self.game_state = GameState(self.filename, self.pacman_lives, self.ghost_difficulty)
@@ -43,9 +84,19 @@ class PacmanEnv:
     def _get_extra_features(self):
         closest_ghost = min(self.game_state.ghosts,
                             key=lambda g: abs(g.x - self.game_state.pacman.x) + abs(g.y - self.game_state.pacman.y))
-        return np.array(
-            [self.game_state.pacman.lives, self.game_state.pacman.x, self.game_state.pacman.y, closest_ghost.x,
-             closest_ghost.y])
+
+        closest_pellet = min(self.game_state.pellets,
+                             key=lambda p: abs(p.x - self.game_state.pacman.x) + abs(p.y - self.game_state.pacman.y))
+        self.closest_pellet = closest_pellet
+        # Calculate relative positions
+        dx_ghost = closest_ghost.x - self.game_state.pacman.x
+        dy_ghost = closest_ghost.y - self.game_state.pacman.y
+
+        dx_pellet = closest_pellet.x - self.game_state.pacman.x
+        dy_pellet = closest_pellet.y - self.game_state.pacman.y
+
+        return np.array([self.game_state.pacman.lives, self.game_state.pacman.score,
+                         dx_ghost, dy_ghost, dx_pellet, dy_pellet])
 
     def render(self):
         sep = '='
@@ -124,7 +175,7 @@ class DQNAgent:
         self.epsilon = 1.0  # Exploration rate
         self.epsilon_min = 0.2  # 0.01 default
         self.epsilon_decay = 0.995
-        self.lr = 1e-2
+        self.lr = 1e-4
         self.absolute_error_upper = 1.
 
         self.model = self._build_model()
@@ -139,7 +190,7 @@ class DQNAgent:
         extra_input = Input(shape=(self.num_extra_features,))
 
         # Convolution layers with batch normalization
-        act_fn = 'elu'
+        act_fn = 'selu'
         conv = Conv2D(16, kernel_size=3, activation=act_fn, padding='same')(grid_input)
         conv = BatchNormalization()(conv)
         conv = Conv2D(32, kernel_size=3, activation=act_fn, padding='same')(conv)
@@ -159,6 +210,9 @@ class DQNAgent:
         hidden = Dense(64, activation=act_fn)(hidden)
         hidden = BatchNormalization()(hidden)
         hidden = Dropout(0.2)(hidden)
+        hidden = Dense(32, activation=act_fn)(hidden)
+        hidden = BatchNormalization()(hidden)
+        hidden = Dropout(0.2)(hidden)
 
         # Dueling DQN architecture
         # Split into value and advantage streams
@@ -175,12 +229,12 @@ class DQNAgent:
         model.compile(optimizer=Nadam(learning_rate=self.lr), loss='mse')
         return model
 
-    def remember(self, state, action, reward, next_state, done):
-        experience = (state, action, reward, next_state, done)
+    def remember(self, state, action, reward, next_state, done, reward_info):
+        experience = (state, action, reward, next_state, done, reward_info)
         max_priority = np.max(self.memory.tree[-self.memory.capacity:])
         if max_priority == 0:
             max_priority = self.absolute_error_upper
-        self.memory.add(max_priority, experience)  # store with max priority
+        self.memory.add(max_priority, experience)
 
     def act(self, state):
         grid_state, extra_features = state
@@ -203,7 +257,7 @@ class DQNAgent:
             priorities.append(idx)
             minibatch.append(data)
 
-        for idx, (state, action, reward, next_state, done) in zip(priorities, minibatch):
+        for idx, (state, action, reward, next_state, done, reward_info) in zip(priorities, minibatch):
             target = reward
             grid_state, extra_features = state
             if not done:

@@ -69,17 +69,15 @@ class GameLogic:
             self.game_state.pacman.x = next_x
             self.game_state.pacman.y = next_y
 
+            # Check for ghost collision
+            for ghost in self.game_state.ghosts:
+                self._check_ghost_collision(ghost)
+
             # Check for pellet collision
             for pellet in self.game_state.pellets:
                 if next_x == pellet.x and next_y == pellet.y:
                     self.game_state.pacman.score += 1
                     self.game_state.remove_pellet(pellet)
-                    break
-
-            # Check for ghost collision
-            for ghost in self.game_state.ghosts:
-                if next_x == ghost.x and next_y == ghost.y:
-                    self.game_state.pacman.lives -= 1
                     break
 
     def _move_ghosts(self):
