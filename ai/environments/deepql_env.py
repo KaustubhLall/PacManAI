@@ -11,6 +11,8 @@ from keras.optimizers import Nadam
 from game.game_logic import GameLogic
 from game.game_state import GameState, print_board
 
+VERBOSITY = 0
+
 EPSILON = 1e-5  # small constant to prevent division by zero
 MAX_GHOST_PENALTY = 1  # This value might need to be adjusted based on your observations
 
@@ -29,6 +31,7 @@ class PacmanEnv:
         self.ghost_distance_threshold = 20
         self.pellet_distance_threshold = 10
         self.prev_lives = pacman_lives
+
     def step(self, action):
         self.game_logic.update(*action)
         current_score = self.game_state.get_score()
@@ -56,7 +59,7 @@ class PacmanEnv:
                 ghost_penalty -= penalty  # Subtract penalty to introduce the danger of ghosts
 
         # Combine rewards
-        reward = ghost_penalty + pellet_reward + lives_penalty
+        reward = ghost_penalty + pellet_reward + lives_penalty * 3
         # print(f'score_reward :{score_reward:4.2f}, lives_penalty :{lives_penalty:4.2f}, ghost_penalty :'
         #     f'{ghost_penalty:4.2f}, pellet_reward :{pellet_reward:4.2f}, total : {reward:4.2f}')
 
@@ -240,7 +243,8 @@ class DQNAgent:
         grid_state, extra_features = state
         if np.random.rand() <= self.epsilon:
             return random.choice(self.actions)
-        act_values = self.model.predict([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]], verbose=0)
+        act_values = self.model.predict([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]],
+                                        verbose=VERBOSITY)
         act_idx = np.argmax(act_values[0])
         return self.actions[act_idx]
 
@@ -265,19 +269,20 @@ class DQNAgent:
 
                 # get the action with max Q-value in the current network
                 act_values = self.model.predict(
-                    [grid_next_state[np.newaxis, ...], extra_next_features[np.newaxis, ...]], verbose=0)
-                action_max = np.argmax(act_values[0],)
+                    [grid_next_state[np.newaxis, ...], extra_next_features[np.newaxis, ...]], verbose=VERBOSITY)
+                action_max = np.argmax(act_values[0], )
 
                 # get the Q-value for the selected action from the target network
                 act_values_target = self.model_target.predict(
-                    [grid_next_state[np.newaxis, ...], extra_next_features[np.newaxis, ...]], verbose=0)
+                    [grid_next_state[np.newaxis, ...], extra_next_features[np.newaxis, ...]], verbose=VERBOSITY)
                 target += self.gamma * act_values_target[0][action_max]
 
-            target_f = self.model.predict([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]], verbose=0)
+            target_f = self.model.predict([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]],
+                                          verbose=VERBOSITY)
             action_index = self.actions.index(action)  # find the index of action
             target_f[0][action_index] = target  # update target at index of action
             self.model.fit([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]], target_f, epochs=1,
-                           verbose=0)
+                           verbose=VERBOSITY)
             self.memory.update(idx, abs(target - target_f[0][action_index]))
 
         if self.epsilon > self.epsilon_min:
