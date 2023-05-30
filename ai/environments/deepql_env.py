@@ -8,7 +8,6 @@ from keras import backend as K
 from keras.layers import Input, Dense, Flatten, Conv2D, Concatenate, BatchNormalization, Dropout, Lambda
 from keras.models import Model
 from keras.optimizers import Nadam
-from keras.optimizers.optimizer_v2.rmsprop import RMSProp
 
 from game.game_logic import GameLogic
 from game.game_state import GameState, print_board
@@ -55,6 +54,61 @@ class PacmanEnv:
                + print_board(self.game_state)
 
 
+class SumTree:
+    write = 0
+
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.tree = np.zeros(2 * capacity - 1)
+        self.data = np.zeros(capacity, dtype=object)
+
+    def _propagate(self, idx, change):
+        parent = (idx - 1) // 2
+
+        self.tree[parent] += change
+
+        if parent != 0:
+            self._propagate(parent, change)
+
+    def _retrieve(self, idx, s):
+        left = 2 * idx + 1
+        right = left + 1
+
+        if left >= len(self.tree):
+            return idx
+
+        if s <= self.tree[left]:
+            return self._retrieve(left, s)
+        else:
+            return self._retrieve(right, s - self.tree[left])
+
+    def total(self):
+        return self.tree[0]
+
+    def add(self, p, data):
+        idx = self.write + self.capacity - 1
+
+        self.data[self.write] = data
+        self.update(idx, p)
+
+        self.write += 1
+        if self.write >= self.capacity:
+            self.write = 0
+
+    def update(self, idx, p):
+        change = p - self.tree[idx]
+
+        self.tree[idx] = p
+        self._propagate(idx, change)
+
+    def get(self, s):
+        idx = self._retrieve(0, s)
+        dataIdx = idx - self.capacity + 1
+
+        return (idx, self.tree[idx], self.data[dataIdx])
+    def __len__(self):
+        return len(self.data)
+
 class DQNAgent:
     def __init__(self, grid_size, num_channels, num_extra_features, actions, load=None):
         self.grid_size = grid_size
@@ -62,14 +116,19 @@ class DQNAgent:
         self.num_extra_features = num_extra_features
         self.action_size = len(actions)
         self.actions = actions
-        self.memory = deque(maxlen=50000)  # Experience replay memory
+        self.memory = SumTree(50000)  # Experience replay memory with SumTree
+        self.epsilon = 0.01  # small epsilon to ensure no zero priority
+        self.alpha = 0.6  # control how much prioritization is used
         self.gamma = 0.95  # Discount factor
         self.epsilon = 1.0  # Exploration rate
         self.epsilon_min = 0.2  # 0.01 default
         self.epsilon_decay = 0.995
         self.lr = 1e-2
+        self.absolute_error_upper = 1.
 
         self.model = self._build_model()
+        self.model_target = self._build_model()
+
         if load is not None:
             self.load(load)
 
@@ -116,7 +175,11 @@ class DQNAgent:
         return model
 
     def remember(self, state, action, reward, next_state, done):
-        self.memory.append((state, action, reward, next_state, done))
+        experience = (state, action, reward, next_state, done)
+        max_priority = np.max(self.memory.tree[-self.memory.capacity:])
+        if max_priority == 0:
+            max_priority = self.absolute_error_upper
+        self.memory.add(max_priority, experience)  # store with max priority
 
     def act(self, state):
         grid_state, extra_features = state
@@ -127,21 +190,47 @@ class DQNAgent:
         return self.actions[act_idx]
 
     def replay(self, batch_size):
-        minibatch = random.sample(self.memory, batch_size)
-        for state, action, reward, next_state, done in minibatch:
+        minibatch = []
+        segment = self.memory.total() / batch_size
+        priorities = []
+
+        for i in range(batch_size):
+            a = segment * i
+            b = segment * (i + 1)
+            s = random.uniform(a, b)
+            (idx, p, data) = self.memory.get(s)
+            priorities.append(idx)
+            minibatch.append(data)
+
+        for idx, (state, action, reward, next_state, done) in zip(priorities, minibatch):
             target = reward
             grid_state, extra_features = state
             if not done:
                 grid_next_state, extra_next_features = next_state
-                target += self.gamma * np.amax(
-                    self.model.predict([grid_next_state[np.newaxis, ...], extra_next_features[np.newaxis, ...]])[0])
+
+                # get the action with max Q-value in the current network
+                act_values = self.model.predict(
+                    [grid_next_state[np.newaxis, ...], extra_next_features[np.newaxis, ...]])
+                action_max = np.argmax(act_values[0])
+
+                # get the Q-value for the selected action from the target network
+                act_values_target = self.model_target.predict(
+                    [grid_next_state[np.newaxis, ...], extra_next_features[np.newaxis, ...]])
+                target += self.gamma * act_values_target[0][action_max]
+
             target_f = self.model.predict([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]])
             action_index = self.actions.index(action)  # find the index of action
             target_f[0][action_index] = target  # update target at index of action
             self.model.fit([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]], target_f, epochs=1,
-                           verbose=-1)
+                           verbose=0)
+            self.memory.update(idx, abs(target - target_f[0][action_index]))
+
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+
+    def update_target_model(self):
+        # copy weights from model to model_target
+        self.model_target.set_weights(self.model.get_weights())
 
     def load(self, name):
         # Load the weights into the model

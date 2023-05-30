@@ -4,10 +4,13 @@ from datetime import datetime
 
 from ai.environments.deepql_env import DQNAgent, PacmanEnv
 
+
 # Define the directories for checkpoints and replays
 CHECKPOINT_DIR = './DQL/checkpoints'
 REPLAY_DIR = './DQL/replays'
 EPISODES = 1000
+TARGET_UPDATE_INTERVAL = 10
+CHECKPOINT_INTERVAL = 5
 
 # Make the directories if they do not exist
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
@@ -42,21 +45,25 @@ for e in range(EPISODES):
         if done:
             score = env.game_state.get_score()
             print(f"episode: {e}/{EPISODES}, score: {score}")
-            if score > high_score or e % 100 == 0:
+            chk = e % CHECKPOINT_INTERVAL == 0
+            if score > high_score or chk:
                 high_score = score
                 timestamp = datetime.now().strftime(f'{file_prefix} - %Y-%m-%d')
                 checkpoint_dir = os.path.join(CHECKPOINT_DIR, timestamp)
                 os.makedirs(checkpoint_dir, exist_ok=True)
-                checkpoint_path = os.path.join(checkpoint_dir, f'score-{score} ep-{e}')
+                checkpoint_path = os.path.join(checkpoint_dir, f'score-{score}' + (f'-ep-{e}' if chk else ''))
                 agent.save(checkpoint_path, score, e)
                 print(f"New high score: {score}, checkpoint saved at {checkpoint_path}")
 
                 replay_dir = os.path.join(REPLAY_DIR, timestamp)
                 os.makedirs(replay_dir, exist_ok=True)
-                replay_path = os.path.join(replay_dir, f'score-{score} ep-{e}-replay.pkl')
+                replay_path = os.path.join(replay_dir, f'score-{score} %s-replay.pkl' % (f'ep {e}' if chk else ''))
                 with open(replay_path, 'wb') as f:
                     pickle.dump((replay_states, replay_actions), f)
                 print(f"Replay saved at: {replay_path}")
 
     if len(agent.memory) > batch_size:
         agent.replay(batch_size)
+
+    if e % TARGET_UPDATE_INTERVAL == 0:
+        agent.update_target_model()
