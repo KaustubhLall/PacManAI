@@ -8,7 +8,7 @@ from keras.layers import Input, Dense, Flatten, Conv2D, Concatenate, BatchNormal
 from keras.models import Model
 from keras.optimizers import Nadam
 
-from game.game_logic import GameLogic
+from game.game_logic import GameLogic, _heuristic
 from game.game_state import GameState, print_board
 
 VERBOSITY = 0
@@ -86,9 +86,34 @@ class PacmanEnv:
         self.game_logic = None
         self.prev_score = 0
         self.reset()
-        self.ghost_distance_threshold = 10
-        self.pellet_distance_threshold = 10
+        self.ghost_distance_threshold = 12
+        self.pellet_distance_threshold = 7
         self.prev_lives = pacman_lives
+
+    def get_distance(self, start, end):
+        visited = np.zeros((self.game_state.board_height, self.game_state.board_width))
+        queue = [(0, start)]  # store nodes with their priorities
+        paths = {start: []}
+
+        while queue:
+            priority, (x, y) = min(queue)  # Check node with lowest priority
+            x, y = x % self.game_state.board_width, y % self.game_state.board_height  # Wrap coordinates
+            queue.remove((priority, (x, y)))  # Remove this node from queue
+
+            if (x, y) == end:
+                return len(paths[(x, y)])  # Return length of the path
+
+            if visited[y][x] == 0:
+                visited[y][x] = 1
+
+                for dx, dy in self.game_logic.get_next_moves(x, y):
+                    next_x, next_y = (x + dx) % self.game_state.board_width, (y + dy) % self.game_state.board_height
+                    if visited[next_y][next_x] == 0:
+                        new_priority = priority + 1 + _heuristic((next_x, next_y), end)
+                        queue.append((new_priority, (next_x, next_y)))
+                        paths[(next_x, next_y)] = paths[(x, y)] + [(dx, dy)]
+
+        raise ValueError("No valid path found in A*")
 
     def step(self, action):
         self.game_logic.update(*action)
@@ -103,13 +128,20 @@ class PacmanEnv:
         else:
             lives_penalty = 0
 
-        pellet_distance = abs(self.closest_pellet.x - self.game_state.pacman.x) + abs(
-            self.closest_pellet.y - self.game_state.pacman.y)
+        # Using A* to calculate pellet distance
+        pellet_distance = self.get_distance(
+            (self.game_state.pacman.x, self.game_state.pacman.y),
+            (self.closest_pellet.x, self.closest_pellet.y)
+        )
         pellet_reward = 1 - pellet_distance / self.pellet_distance_threshold  # Scales from 0 to 1 as distance decreases
 
         ghost_penalty = 0
         for ghost in self.game_state.ghosts:
-            distance = abs(self.game_state.pacman.x - ghost.x) + abs(self.game_state.pacman.y - ghost.y)
+            # Using A* to calculate ghost distance
+            distance = self.get_distance(
+                (self.game_state.pacman.x, self.game_state.pacman.y),
+                (ghost.x, ghost.y)
+            )
             if distance < self.ghost_distance_threshold:
                 # Calculate penalty as a scaled logarithmic function
                 penalty = np.log(self.ghost_distance_threshold) - np.log(distance + EPSILON)
@@ -118,8 +150,6 @@ class PacmanEnv:
 
         # Combine rewards
         reward = ghost_penalty + pellet_reward + lives_penalty * 3
-        # print(f'score_reward :{score_reward:4.2f}, lives_penalty :{lives_penalty:4.2f}, ghost_penalty :'
-        #     f'{ghost_penalty:4.2f}, pellet_reward :{pellet_reward:4.2f}, total : {reward:4.2f}')
 
         reward_info = {
             'score_reward': score_reward,
@@ -172,14 +202,14 @@ class DQNAgent:
         self.num_extra_features = num_extra_features
         self.action_size = len(actions)
         self.actions = actions
-        self.memory = SumTree(50000)  # Experience replay memory with SumTree
+        self.memory = SumTree(25000)  # Experience replay memory with SumTree
         self.epsilon = 0.01  # small epsilon to ensure no zero priority
-        self.alpha = 0.6  # control how much prioritization is used
+        self.alpha = 0.2  # control how much prioritization is used
         self.gamma = 0.95  # Discount factor
         self.epsilon = 1.0  # Exploration rate
         self.epsilon_min = 0.2  # 0.01 default
         self.epsilon_decay = 0.999
-        self.lr = 1e-4
+        self.lr = 5e-5
         self.absolute_error_upper = 1.
 
         self.model = self._build_model()
@@ -195,11 +225,11 @@ class DQNAgent:
 
         # Convolution layers with batch normalization
         act_fn = 'selu'
-        conv = Conv2D(16, kernel_size=3, activation=act_fn, padding='same')(grid_input)
+        conv = Conv2D(16 * 2, kernel_size=3, activation=act_fn, padding='same')(grid_input)
         conv = BatchNormalization()(conv)
-        conv = Conv2D(32, kernel_size=3, activation=act_fn, padding='same')(conv)
+        conv = Conv2D(32 * 2, kernel_size=3, activation=act_fn, padding='same')(conv)
         conv = BatchNormalization()(conv)
-        conv = Conv2D(64, kernel_size=3, activation=act_fn, padding='same')(conv)
+        conv = Conv2D(64 * 2, kernel_size=3, activation=act_fn, padding='same')(conv)
         conv = BatchNormalization()(conv)
 
         flat = Flatten()(conv)
@@ -208,7 +238,7 @@ class DQNAgent:
         concat = Concatenate()([flat, extra_input])
 
         # Fully connected layers with batch normalization and dropout
-        hidden = Dense(128, activation=act_fn)(concat)
+        hidden = Dense(256, activation=act_fn)(concat)
         hidden = BatchNormalization()(hidden)
         hidden = Dropout(0.2)(hidden)
         hidden = Dense(64, activation=act_fn)(hidden)
@@ -221,7 +251,7 @@ class DQNAgent:
         # Dueling DQN architecture
         # Split into value and advantage streams
         hidden1 = Dense(32, activation=act_fn)(hidden)
-        hidden2 = Dense(32, activation=act_fn)(hidden)
+        hidden2 = Dense(128, activation=act_fn)(hidden)
         state_value = Dense(1)(hidden1)
         action_advantages = Dense(self.action_size)(hidden2)
 

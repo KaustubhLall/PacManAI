@@ -10,7 +10,7 @@ from ai.environments.deepql_env import DQNAgent, PacmanEnv
 CHECKPOINT_DIR = './DQL/checkpoints'
 REPLAY_DIR = './DQL/replays'
 EPISODES = 10000
-TARGET_UPDATE_INTERVAL = 5
+TARGET_UPDATE_INTERVAL = 10
 CHECKPOINT_INTERVAL = 100
 
 # Make the directories if they do not exist
