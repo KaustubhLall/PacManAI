@@ -1,7 +1,8 @@
 import os
 import pickle
 from datetime import datetime
-import ipykernel
+import numpy as np
+from tqdm import tqdm
 from ai.environments.deepql_env import DQNAgent, PacmanEnv
 
 
@@ -28,6 +29,8 @@ env = PacmanEnv('../mazes/1.txt', pacman_lives=3, ghost_difficulty=3)
 high_score = 0
 file_prefix = 'pacmanDQL'
 
+pbar = tqdm(total=EPISODES, desc='Episodes', position=0)
+
 for e in range(EPISODES):
     state = env.reset()
     done = False
@@ -45,7 +48,6 @@ for e in range(EPISODES):
         state = next_state
         if done:
             score = env.game_state.get_score()
-            print(f"episode: {e}/{EPISODES}, score: {score}")
             chk = e % CHECKPOINT_INTERVAL == 0
             if score > high_score or chk:
                 high_score = score
@@ -54,17 +56,25 @@ for e in range(EPISODES):
                 os.makedirs(checkpoint_dir, exist_ok=True)
                 checkpoint_path = os.path.join(checkpoint_dir, f'score-{score}' + (f'-ep-{e}' if chk else ''))
                 agent.save(checkpoint_path, score, e)
-                print(f"New high score: {score}, checkpoint saved at {checkpoint_path}")
 
                 replay_dir = os.path.join(REPLAY_DIR, timestamp)
                 os.makedirs(replay_dir, exist_ok=True)
                 replay_path = os.path.join(replay_dir, f'score-{score} %s-replay.pkl' % (f'ep {e}' if chk else ''))
                 with open(replay_path, 'wb') as f:
                     pickle.dump((replay_states, replay_actions), f)
-                print(f"Replay saved at: {replay_path}")
+
+                tqdm.write(f"Ep: {e}, Score: {score}, New High Score! Replay saved at: {replay_path}")
+            else:
+                tqdm.write(f"Ep: {e}, Score: {score}")
+
+            # Update the progress bar postfix with the current high score
+            pbar.set_postfix({"High Score": high_score}, refresh=True)
 
     if len(agent.memory) > batch_size:
         agent.replay(batch_size)
 
     if e % TARGET_UPDATE_INTERVAL == 0:
         agent.update_target_model()
+
+    # Update the progress bar
+    pbar.update(1)
