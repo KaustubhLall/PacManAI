@@ -116,7 +116,7 @@ def print_board(gamestate):
     board_copy[gamestate.pacman.y][gamestate.pacman.x] = '😮'  # Pacman
 
     for pellet in gamestate.pellets:
-        board_copy[pellet.y][pellet.x] = '🍚'  # Pellets
+        board_copy[pellet.y][pellet.x] = '🍒'  # Pellets
 
     for ghost in gamestate.ghosts:
         board_copy[ghost.y][ghost.x] = '👻'  # Ghosts

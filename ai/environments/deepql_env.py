@@ -11,6 +11,8 @@ from keras.optimizers import Nadam
 from game.game_logic import GameLogic
 from game.game_state import GameState, print_board
 
+VERBOSITY = 0
+
 EPSILON = 1e-5  # small constant to prevent division by zero
 MAX_GHOST_PENALTY = 1  # This value might need to be adjusted based on your observations
 
@@ -28,15 +30,20 @@ class PacmanEnv:
         self.reset()
         self.ghost_distance_threshold = 20
         self.pellet_distance_threshold = 10
+        self.prev_lives = pacman_lives
 
     def step(self, action):
         self.game_logic.update(*action)
         current_score = self.game_state.get_score()
+        current_lives = self.game_state.pacman.lives
 
         # Calculate each reward component
         score_reward = (1 if (current_score - self.prev_score) else 0)
 
-        lives_penalty = ((self.pacman_lives - self.game_state.pacman.lives) * -1) / self.pacman_lives
+        if self.prev_lives > current_lives:  # if a life was lost
+            lives_penalty = ((self.prev_lives - current_lives) * -1)
+        else:
+            lives_penalty = 0
 
         pellet_distance = abs(self.closest_pellet.x - self.game_state.pacman.x) + abs(
             self.closest_pellet.y - self.game_state.pacman.y)
@@ -52,10 +59,9 @@ class PacmanEnv:
                 ghost_penalty -= penalty  # Subtract penalty to introduce the danger of ghosts
 
         # Combine rewards
-        reward = ghost_penalty + pellet_reward
-        print(
-            f'score_reward :{score_reward:4.2f}, lives_penalty :{lives_penalty:4.2f}, ghost_penalty :'
-            f'{ghost_penalty:4.2f}, pellet_reward :{pellet_reward:4.2f}, total : {reward:4.2f}')
+        reward = ghost_penalty + pellet_reward + lives_penalty * 3
+        # print(f'score_reward :{score_reward:4.2f}, lives_penalty :{lives_penalty:4.2f}, ghost_penalty :'
+        #     f'{ghost_penalty:4.2f}, pellet_reward :{pellet_reward:4.2f}, total : {reward:4.2f}')
 
         reward_info = {
             'score_reward': score_reward,
@@ -66,6 +72,8 @@ class PacmanEnv:
         }
 
         self.prev_score = current_score
+        self.prev_lives = current_lives
+
         done = self.game_state.is_game_over()
         next_state = self.game_state.get_encoding_ql()
         return (next_state, self._get_extra_features()), reward, done, reward_info
@@ -170,7 +178,7 @@ class DQNAgent:
         self.epsilon = 1.0  # Exploration rate
         self.epsilon_min = 0.2  # 0.01 default
         self.epsilon_decay = 0.995
-        self.lr = 1e-2
+        self.lr = 1e-4
         self.absolute_error_upper = 1.
 
         self.model = self._build_model()
@@ -185,7 +193,7 @@ class DQNAgent:
         extra_input = Input(shape=(self.num_extra_features,))
 
         # Convolution layers with batch normalization
-        act_fn = 'elu'
+        act_fn = 'selu'
         conv = Conv2D(16, kernel_size=3, activation=act_fn, padding='same')(grid_input)
         conv = BatchNormalization()(conv)
         conv = Conv2D(32, kernel_size=3, activation=act_fn, padding='same')(conv)
@@ -203,6 +211,9 @@ class DQNAgent:
         hidden = BatchNormalization()(hidden)
         hidden = Dropout(0.2)(hidden)
         hidden = Dense(64, activation=act_fn)(hidden)
+        hidden = BatchNormalization()(hidden)
+        hidden = Dropout(0.2)(hidden)
+        hidden = Dense(32, activation=act_fn)(hidden)
         hidden = BatchNormalization()(hidden)
         hidden = Dropout(0.2)(hidden)
 
@@ -232,7 +243,8 @@ class DQNAgent:
         grid_state, extra_features = state
         if np.random.rand() <= self.epsilon:
             return random.choice(self.actions)
-        act_values = self.model.predict([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]])
+        act_values = self.model.predict([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]],
+                                        verbose=VERBOSITY)
         act_idx = np.argmax(act_values[0])
         return self.actions[act_idx]
 
@@ -257,19 +269,20 @@ class DQNAgent:
 
                 # get the action with max Q-value in the current network
                 act_values = self.model.predict(
-                    [grid_next_state[np.newaxis, ...], extra_next_features[np.newaxis, ...]])
-                action_max = np.argmax(act_values[0])
+                    [grid_next_state[np.newaxis, ...], extra_next_features[np.newaxis, ...]], verbose=VERBOSITY)
+                action_max = np.argmax(act_values[0], )
 
                 # get the Q-value for the selected action from the target network
                 act_values_target = self.model_target.predict(
-                    [grid_next_state[np.newaxis, ...], extra_next_features[np.newaxis, ...]])
+                    [grid_next_state[np.newaxis, ...], extra_next_features[np.newaxis, ...]], verbose=VERBOSITY)
                 target += self.gamma * act_values_target[0][action_max]
 
-            target_f = self.model.predict([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]])
+            target_f = self.model.predict([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]],
+                                          verbose=VERBOSITY)
             action_index = self.actions.index(action)  # find the index of action
             target_f[0][action_index] = target  # update target at index of action
             self.model.fit([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]], target_f, epochs=1,
-                           verbose=0)
+                           verbose=VERBOSITY)
             self.memory.update(idx, abs(target - target_f[0][action_index]))
 
         if self.epsilon > self.epsilon_min:

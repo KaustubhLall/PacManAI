@@ -1,16 +1,16 @@
 import os
 import pickle
 from datetime import datetime
-
+import ipykernel
 from ai.environments.deepql_env import DQNAgent, PacmanEnv
 
 
 # Define the directories for checkpoints and replays
 CHECKPOINT_DIR = './DQL/checkpoints'
 REPLAY_DIR = './DQL/replays'
-EPISODES = 1000
+EPISODES = 10000
 TARGET_UPDATE_INTERVAL = 10
-CHECKPOINT_INTERVAL = 5
+CHECKPOINT_INTERVAL = 100
 
 # Make the directories if they do not exist
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
@@ -23,7 +23,7 @@ num_channels = 5
 num_extra_features = 6
 agent = DQNAgent((grid_height, grid_width), num_channels, num_extra_features, actions,)
 # agent.load('C:/Users/kaus/PycharmProjects/PacManAI/ai/DQL/checkpoints/pacmanDQL - 2023-05-29/score-38')
-batch_size = 64
+batch_size = 32
 env = PacmanEnv('../mazes/1.txt', pacman_lives=3, ghost_difficulty=3)
 high_score = 0
 file_prefix = 'pacmanDQL'

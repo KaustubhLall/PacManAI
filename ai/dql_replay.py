@@ -4,7 +4,7 @@ from ai.environments.deepql_env import PacmanEnv
 
 # Load the replay data
 # Replace with your replay file below
-replay_file = 'C:/Users/kaus/PycharmProjects/PacManAI/ai/DQL/replays/pacmanDQL - 2023-05-30/score-15 ep 0-replay.pkl'
+replay_file = 'C:/Users/kaus/PycharmProjects/PacManAI/ai/DQL/replays/pacmanDQL - 2023-05-30/score-50 -replay.pkl'
 with open(replay_file, 'rb') as f:
     replay_states, replay_actions = pickle.load(f)
 
@@ -18,11 +18,11 @@ env.reset()
 for state, action in zip(replay_states, replay_actions):
     _, reward, _, reward_info = env.step(action)
     print(env.render())  # Display the game state
-    print("Score Reward:", reward_info['score_reward'])
-    print("Ghost Penalty:", reward_info['ghost_penalty'])
-    print("Pellet Reward:", reward_info['pellet_reward'])
-    print("Lives Penalty:", reward_info['lives_penalty'])
-    print("Total Reward:", reward_info['total_reward'])
+    print("Score Reward:", reward_info['score_reward'], end=' | ')
+    print("Ghost Penalty:", reward_info['ghost_penalty'], end=' | ')
+    print("Pellet Reward:", reward_info['pellet_reward'], end=' | ')
+    print("Lives Penalty:", reward_info['lives_penalty'], end=' | ')
+    print("Total Reward (Ghost+Pellet):", reward_info['total_reward'])
     i = input('press any to continue (n to terminate)...')
     if i == 'n':
         break
