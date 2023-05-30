@@ -240,7 +240,7 @@ class DQNAgent:
         grid_state, extra_features = state
         if np.random.rand() <= self.epsilon:
             return random.choice(self.actions)
-        act_values = self.model.predict([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]])
+        act_values = self.model.predict([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]], verbose=0)
         act_idx = np.argmax(act_values[0])
         return self.actions[act_idx]
 
@@ -265,15 +265,15 @@ class DQNAgent:
 
                 # get the action with max Q-value in the current network
                 act_values = self.model.predict(
-                    [grid_next_state[np.newaxis, ...], extra_next_features[np.newaxis, ...]])
-                action_max = np.argmax(act_values[0])
+                    [grid_next_state[np.newaxis, ...], extra_next_features[np.newaxis, ...]], verbose=0)
+                action_max = np.argmax(act_values[0],)
 
                 # get the Q-value for the selected action from the target network
                 act_values_target = self.model_target.predict(
-                    [grid_next_state[np.newaxis, ...], extra_next_features[np.newaxis, ...]])
+                    [grid_next_state[np.newaxis, ...], extra_next_features[np.newaxis, ...]], verbose=0)
                 target += self.gamma * act_values_target[0][action_max]
 
-            target_f = self.model.predict([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]])
+            target_f = self.model.predict([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]], verbose=0)
             action_index = self.actions.index(action)  # find the index of action
             target_f[0][action_index] = target  # update target at index of action
             self.model.fit([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]], target_f, epochs=1,
