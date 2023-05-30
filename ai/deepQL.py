@@ -19,7 +19,7 @@ grid_width = 28
 num_channels = 5
 num_extra_features = 5
 agent = DQNAgent((grid_height, grid_width), num_channels, num_extra_features, actions,)
-agent.load('C:/Users/kaus/PycharmProjects/PacManAI/ai/DQL/checkpoints/pacmanDQL - 2023-05-29/score-38-weights.h5')
+# agent.load('C:/Users/kaus/PycharmProjects/PacManAI/ai/DQL/checkpoints/pacmanDQL - 2023-05-29/score-38')
 batch_size = 8
 env = PacmanEnv('../mazes/1.txt', pacman_lives=3, ghost_difficulty=3)
 high_score = 0
@@ -47,8 +47,8 @@ for e in range(EPISODES):
                 timestamp = datetime.now().strftime(f'{file_prefix} - %Y-%m-%d')
                 checkpoint_dir = os.path.join(CHECKPOINT_DIR, timestamp)
                 os.makedirs(checkpoint_dir, exist_ok=True)
-                checkpoint_path = os.path.join(checkpoint_dir, f'score-{score}-weights.h5')
-                agent.save(checkpoint_path)
+                checkpoint_path = os.path.join(checkpoint_dir, f'score-{score}')
+                agent.save(checkpoint_path, score, e)
                 print(f"New high score: {high_score}, checkpoint saved at {checkpoint_path}")
 
                 replay_dir = os.path.join(REPLAY_DIR, timestamp)

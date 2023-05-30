@@ -1,5 +1,7 @@
+import json
 import random
 from collections import deque
+from datetime import datetime
 
 import numpy as np
 from keras import backend as K
@@ -10,7 +12,8 @@ from keras.optimizers.optimizer_v2.rmsprop import RMSProp
 from game.game_logic import GameLogic
 from game.game_state import GameState, print_board
 
-
+# todo implement double Q-learning
+# todo switch to prioritized experience replay
 class PacmanEnv:
     def __init__(self, filename, pacman_lives, ghost_difficulty):
         self.filename = filename
@@ -24,7 +27,8 @@ class PacmanEnv:
     def step(self, action):
         self.game_logic.update(*action)
         current_score = self.game_state.get_score()
-        reward = (2 if (current_score - self.prev_score) else -0.1) - ((self.pacman_lives - self.game_state.pacman.lives) * 50)
+        reward = (2 if (current_score - self.prev_score) else -0.1) - (
+                (self.pacman_lives - self.game_state.pacman.lives) * 50)
         self.prev_score = current_score
         done = self.game_state.is_game_over()
         next_state = self.game_state.get_encoding_ql()
@@ -104,7 +108,7 @@ class DQNAgent:
                         output_shape=(self.action_size,))([state_value, action_advantages])
 
         model = Model(inputs=[grid_input, extra_input], outputs=output)
-        model.compile(optimizer=RMSProp(), loss='mse')
+        model.compile(optimizer=RMSProp(learning_rate=5e-5), loss='mse')
         return model
 
     def remember(self, state, action, reward, next_state, done):
@@ -131,12 +135,47 @@ class DQNAgent:
             action_index = self.actions.index(action)  # find the index of action
             target_f[0][action_index] = target  # update target at index of action
             self.model.fit([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]], target_f, epochs=1,
-                           verbose=0)
+                           verbose=-1)
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
     def load(self, name):
-        self.model.load_weights(name)
+        # Load the weights into the model
+        self.model.load_weights(name + '_weights.h5')
 
-    def save(self, name):
-        self.model.save_weights(name)
+        # Load and return the metadata
+        try:
+            with open(name + '_metadata.json', 'r') as json_file:
+                metadata = json.load(json_file)
+        except:
+            print("Couldn't read metadata.")
+            metadata = None
+        return metadata
+
+    def save(self, name, score, episode_number, final=False):
+        # Create a metadata dictionary
+        metadata = {
+            'score': score,
+            'episode_number': episode_number,
+            'save_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'parameters': {
+                'epsilon': self.epsilon,
+                'gamma': self.gamma
+            },
+            'final_model': final
+        }
+
+        # Save the model weights and architecture
+        if final:
+            self.model.save(name + '.h5')  # Saves both weights and architecture
+        else:
+            self.model.save_weights(name + '_weights.h5')
+
+        # Save the model architecture to JSON
+        model_json = self.model.to_json()
+        with open(name + '_architecture.json', 'w') as json_file:
+            json_file.write(model_json)
+
+        # Save the metadata
+        with open(name + '_metadata.json', 'w') as json_file:
+            json.dump(metadata, json_file)
