@@ -1,6 +1,5 @@
 import json
 import random
-from collections import deque
 from datetime import datetime
 
 import numpy as np
@@ -29,7 +28,7 @@ class PacmanEnv:
         self.game_logic.update(*action)
         current_score = self.game_state.get_score()
         reward = (1 if (current_score - self.prev_score) else -0.01) - (
-                (self.pacman_lives - self.game_state.pacman.lives) * -0.5)
+                (self.pacman_lives - self.game_state.pacman.lives) * -2)
         self.prev_score = current_score
         done = self.game_state.is_game_over()
         next_state = self.game_state.get_encoding_ql()
@@ -106,8 +105,10 @@ class SumTree:
         dataIdx = idx - self.capacity + 1
 
         return (idx, self.tree[idx], self.data[dataIdx])
+
     def __len__(self):
         return len(self.data)
+
 
 class DQNAgent:
     def __init__(self, grid_size, num_channels, num_extra_features, actions, load=None):

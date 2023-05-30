@@ -27,6 +27,7 @@ batch_size = 8
 env = PacmanEnv('../mazes/1.txt', pacman_lives=3, ghost_difficulty=3)
 high_score = 0
 file_prefix = 'pacmanDQL'
+
 for e in range(EPISODES):
     state = env.reset()
     done = False
