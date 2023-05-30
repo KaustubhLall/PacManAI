@@ -42,18 +42,18 @@ for e in range(EPISODES):
         if done:
             score = env.game_state.get_score()
             print(f"episode: {e}/{EPISODES}, score: {score}")
-            if score > high_score:
+            if score > high_score or e % 100 == 0:
                 high_score = score
                 timestamp = datetime.now().strftime(f'{file_prefix} - %Y-%m-%d')
                 checkpoint_dir = os.path.join(CHECKPOINT_DIR, timestamp)
                 os.makedirs(checkpoint_dir, exist_ok=True)
-                checkpoint_path = os.path.join(checkpoint_dir, f'score-{score}')
+                checkpoint_path = os.path.join(checkpoint_dir, f'score-{score} ep-{e}')
                 agent.save(checkpoint_path, score, e)
-                print(f"New high score: {high_score}, checkpoint saved at {checkpoint_path}")
+                print(f"New high score: {score}, checkpoint saved at {checkpoint_path}")
 
                 replay_dir = os.path.join(REPLAY_DIR, timestamp)
                 os.makedirs(replay_dir, exist_ok=True)
-                replay_path = os.path.join(replay_dir, f'score-{score}-replay.pkl')
+                replay_path = os.path.join(replay_dir, f'score-{score} ep-{e}-replay.pkl')
                 with open(replay_path, 'wb') as f:
                     pickle.dump((replay_states, replay_actions), f)
                 print(f"Replay saved at: {replay_path}")

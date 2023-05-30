@@ -7,10 +7,12 @@ import numpy as np
 from keras import backend as K
 from keras.layers import Input, Dense, Flatten, Conv2D, Concatenate, BatchNormalization, Dropout, Lambda
 from keras.models import Model
+from keras.optimizers import Nadam
 from keras.optimizers.optimizer_v2.rmsprop import RMSProp
 
 from game.game_logic import GameLogic
 from game.game_state import GameState, print_board
+
 
 # todo implement double Q-learning
 # todo switch to prioritized experience replay
@@ -27,8 +29,8 @@ class PacmanEnv:
     def step(self, action):
         self.game_logic.update(*action)
         current_score = self.game_state.get_score()
-        reward = (2 if (current_score - self.prev_score) else -0.1) - (
-                (self.pacman_lives - self.game_state.pacman.lives) * 50)
+        reward = (1 if (current_score - self.prev_score) else -0.01) - (
+                (self.pacman_lives - self.game_state.pacman.lives) * -0.5)
         self.prev_score = current_score
         done = self.game_state.is_game_over()
         next_state = self.game_state.get_encoding_ql()
@@ -60,13 +62,14 @@ class DQNAgent:
         self.num_extra_features = num_extra_features
         self.action_size = len(actions)
         self.actions = actions
-        self.memory = deque(maxlen=2000)  # Experience replay memory
+        self.memory = deque(maxlen=50000)  # Experience replay memory
         self.gamma = 0.95  # Discount factor
         self.epsilon = 1.0  # Exploration rate
-        self.epsilon_min = 0.01
+        self.epsilon_min = 0.2  # 0.01 default
         self.epsilon_decay = 0.995
-        self.model = self._build_model()
+        self.lr = 1e-2
 
+        self.model = self._build_model()
         if load is not None:
             self.load(load)
 
@@ -76,11 +79,12 @@ class DQNAgent:
         extra_input = Input(shape=(self.num_extra_features,))
 
         # Convolution layers with batch normalization
-        conv = Conv2D(32, kernel_size=3, activation='relu')(grid_input)
+        act_fn = 'elu'
+        conv = Conv2D(16, kernel_size=3, activation=act_fn, padding='same')(grid_input)
         conv = BatchNormalization()(conv)
-        conv = Conv2D(64, kernel_size=3, activation='relu')(conv)
+        conv = Conv2D(32, kernel_size=3, activation=act_fn, padding='same')(conv)
         conv = BatchNormalization()(conv)
-        conv = Conv2D(128, kernel_size=3, activation='relu')(conv)
+        conv = Conv2D(64, kernel_size=3, activation=act_fn, padding='same')(conv)
         conv = BatchNormalization()(conv)
 
         flat = Flatten()(conv)
@@ -89,17 +93,17 @@ class DQNAgent:
         concat = Concatenate()([flat, extra_input])
 
         # Fully connected layers with batch normalization and dropout
-        hidden = Dense(256, activation='relu')(concat)
+        hidden = Dense(128, activation=act_fn)(concat)
         hidden = BatchNormalization()(hidden)
         hidden = Dropout(0.5)(hidden)
-        hidden = Dense(128, activation='relu')(hidden)
+        hidden = Dense(64, activation=act_fn)(hidden)
         hidden = BatchNormalization()(hidden)
         hidden = Dropout(0.5)(hidden)
 
         # Dueling DQN architecture
         # Split into value and advantage streams
-        hidden1 = Dense(64, activation='relu')(hidden)
-        hidden2 = Dense(64, activation='relu')(hidden)
+        hidden1 = Dense(32, activation=act_fn)(hidden)
+        hidden2 = Dense(32, activation=act_fn)(hidden)
         state_value = Dense(1)(hidden1)
         action_advantages = Dense(self.action_size)(hidden2)
 
@@ -108,7 +112,7 @@ class DQNAgent:
                         output_shape=(self.action_size,))([state_value, action_advantages])
 
         model = Model(inputs=[grid_input, extra_input], outputs=output)
-        model.compile(optimizer=RMSProp(learning_rate=5e-5), loss='mse')
+        model.compile(optimizer=Nadam(learning_rate=self.lr), loss='mse')
         return model
 
     def remember(self, state, action, reward, next_state, done):
