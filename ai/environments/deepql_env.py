@@ -155,10 +155,10 @@ class DQNAgent:
         # Fully connected layers with batch normalization and dropout
         hidden = Dense(128, activation=act_fn)(concat)
         hidden = BatchNormalization()(hidden)
-        hidden = Dropout(0.5)(hidden)
+        hidden = Dropout(0.2)(hidden)
         hidden = Dense(64, activation=act_fn)(hidden)
         hidden = BatchNormalization()(hidden)
-        hidden = Dropout(0.5)(hidden)
+        hidden = Dropout(0.2)(hidden)
 
         # Dueling DQN architecture
         # Split into value and advantage streams
