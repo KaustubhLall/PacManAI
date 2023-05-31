@@ -5,10 +5,11 @@ from datetime import datetime
 import numpy as np
 from keras import backend as K
 from keras.callbacks import TensorBoard
-from keras.layers import Input, Dense, Flatten, Conv2D, Concatenate, BatchNormalization, Lambda, Add
+from keras.layers import Input, Dense, Flatten, Conv2D, BatchNormalization, Lambda, concatenate
 from keras.models import Model
 from keras.optimizers import Nadam
 
+from ai.environments.sumtree import SumTree
 from game.game_logic import GameLogic, _heuristic
 from game.game_state import GameState, print_board
 
@@ -18,62 +19,8 @@ EPSILON = 1e-5  # small constant to prevent division by zero
 MAX_GHOST_PENALTY = 1  # This value might need to be adjusted based on your observations
 
 
-# todo experiment with hidden architecture
-class SumTree:
-    write = 0
-
-    def __init__(self, capacity):
-        self.capacity = capacity
-        self.tree = np.zeros(2 * capacity - 1)
-        self.data = np.zeros(capacity, dtype=object)
-
-    def _propagate(self, idx, change):
-        parent = (idx - 1) // 2
-
-        self.tree[parent] += change
-
-        if parent != 0:
-            self._propagate(parent, change)
-
-    def _retrieve(self, idx, s):
-        left = 2 * idx + 1
-        right = left + 1
-
-        if left >= len(self.tree):
-            return idx
-
-        if s <= self.tree[left]:
-            return self._retrieve(left, s)
-        else:
-            return self._retrieve(right, s - self.tree[left])
-
-    def total(self):
-        return self.tree[0]
-
-    def add(self, p, data):
-        idx = self.write + self.capacity - 1
-
-        self.data[self.write] = data
-        self.update(idx, p)
-
-        self.write += 1
-        if self.write >= self.capacity:
-            self.write = 0
-
-    def update(self, idx, p):
-        change = p - self.tree[idx]
-
-        self.tree[idx] = p
-        self._propagate(idx, change)
-
-    def get(self, s):
-        idx = self._retrieve(0, s)
-        dataIdx = idx - self.capacity + 1
-
-        return (idx, self.tree[idx], self.data[dataIdx])
-
-    def __len__(self):
-        return len(self.data)
+# todo implement double Q-learning
+# todo switch to prioritized experience replay
 
 
 class PacmanEnv:
@@ -84,12 +31,11 @@ class PacmanEnv:
         self.game_state = None
         self.game_logic = None
         self.prev_score = 0
-        self.reset()
         self.prev_lives = pacman_lives
         self.time_alive = 0
         self.time_since_last_pellet = 5  # Initialize to a larger value
-        self.ghost_distance_threshold = 10
-        self.pellet_distance_threshold = 10
+        self.ghost_distance_threshold = 15
+        self.pellet_distance_threshold = 5
         self.reset()
 
     def get_distance(self, start, end):
@@ -163,7 +109,8 @@ class PacmanEnv:
             time_since_last_pellet_penalty = self.time_since_last_pellet / 5  # Normalize penalty
 
         # Combine rewards
-        reward = ghost_penalty + pellet_reward + lives_penalty * 3 + time_alive_reward - time_since_last_pellet_penalty
+        reward = ghost_penalty * 4 + pellet_reward + lives_penalty * 10 + time_alive_reward - \
+                 time_since_last_pellet_penalty + score_reward
 
         reward_info = {
             'score_reward': score_reward,
@@ -221,12 +168,11 @@ class DQNAgent:
         self.action_size = len(actions)
         self.actions = actions
         self.memory = SumTree(75000)  # Experience replay memory with SumTree
-        self.epsilon = 0.01  # small epsilon to ensure no zero priority
         self.alpha = 0.95  # control how much prioritization is used
         self.gamma = 0.6  # Discount factor
         self.epsilon = 1.0  # Exploration rate
-        self.epsilon_min = 0.2  # 0.01 default
-        self.epsilon_decay = 0.999
+        self.epsilon_min = 0.05  # 0.01 default
+        self.epsilon_decay = 0.9
         self.lr = 1e-3
         self.absolute_error_upper = 1.
 
@@ -241,58 +187,38 @@ class DQNAgent:
         grid_input = Input(shape=(self.grid_size[0], self.grid_size[1], self.num_channels))
         extra_input = Input(shape=(self.num_extra_features,))
 
-        # Convolution layers with batch normalization and Residual Connections
+        # Convolution layers with batch normalization
         act_fn = 'relu'
 
-        conv1 = Conv2D(16, kernel_size=3, activation=act_fn, padding='same')(grid_input)
+        conv1 = Conv2D(32, kernel_size=3, activation=act_fn, padding='same')(grid_input)
         conv1 = BatchNormalization()(conv1)
 
-        conv2 = Conv2D(16, kernel_size=3, activation=act_fn, padding='same')(conv1)
+        conv2 = Conv2D(32, kernel_size=3, activation=act_fn, padding='same')(conv1)
         conv2 = BatchNormalization()(conv2)
 
-        residual1 = Add()([conv1, conv2])
+        flat = Flatten()(conv2)
 
-        conv3 = Conv2D(32, kernel_size=3, activation=act_fn, padding='same')(residual1)
-        conv3 = BatchNormalization()(conv3)
-
-        conv4 = Conv2D(32, kernel_size=3, activation=act_fn, padding='same')(conv3)
-        conv4 = BatchNormalization()(conv4)
-
-        residual2 = Add()([conv3, conv4])
-
-        conv5 = Conv2D(64, kernel_size=3, activation=act_fn, padding='same')(residual2)
-        conv5 = BatchNormalization()(conv5)
-
-        conv6 = Conv2D(64, kernel_size=3, activation=act_fn, padding='same')(conv5)
-        conv6 = BatchNormalization()(conv6)
-
-        residual3 = Add()([conv5, conv6])
-
-        flat = Flatten()(residual3)
-
-        # Concatenation with extra features
-        concat = Concatenate()([flat, extra_input])
+        # Concatenate grid and extra features
+        merged = concatenate([flat, extra_input])
 
         # Fully connected layers with batch normalization
-        hidden = Dense(256, activation=act_fn)(concat)
+        hidden = Dense(128, activation=act_fn)(merged)
         hidden = BatchNormalization()(hidden)
         hidden = Dense(64, activation=act_fn)(hidden)
         hidden = BatchNormalization()(hidden)
-        hidden = Dense(32, activation=act_fn)(hidden)
-        hidden = BatchNormalization()(hidden)
 
         # Dueling DQN architecture
-        # Split into value and advantage streams
-        hidden1 = Dense(32, activation=act_fn)(hidden)
-        hidden2 = Dense(128, activation=act_fn)(hidden)
-        state_value = Dense(1)(hidden1)
-        action_advantages = Dense(self.action_size)(hidden2)
+        state_value = Dense(1)(hidden)
+        action_advantages = Dense(self.action_size)(hidden)
 
         # Combine streams into final Q Values
         output = Lambda(lambda x: x[0] + (x[1] - K.mean(x[1], axis=1, keepdims=True)),
                         output_shape=(self.action_size,))([state_value, action_advantages])
 
         model = Model(inputs=[grid_input, extra_input], outputs=output)
+
+        # Using a dynamic learning rate
+
         model.compile(optimizer=Nadam(learning_rate=self.lr), loss='mse')
         return model
 
@@ -350,7 +276,9 @@ class DQNAgent:
             tensorboard_callback = TensorBoard(log_dir=log_dir, histogram_freq=1)
 
             self.model.fit([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]], target_f, epochs=1,
-                           verbose=VERBOSITY, callbacks=[tensorboard_callback])
+                           verbose=VERBOSITY,
+                           # callbacks=[tensorboard_callback]
+                           )
 
             self.memory.update(idx, abs(target - target_f[0][action_index]))
 

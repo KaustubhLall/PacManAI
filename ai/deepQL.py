@@ -22,7 +22,7 @@ os.makedirs(REPLAY_DIR, exist_ok=True)
 actions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 grid_height = 31
 grid_width = 28
-num_channels = 5
+num_channels = 1
 num_extra_features = 8
 agent = DQNAgent((grid_height, grid_width), num_channels, num_extra_features, actions, )
 # agent.load('C:/Users/spide/PycharmProjects/PacManAI/ai/DQL/checkpoints/pacmanDQL - 2023-05-31/score-23-ep-9700')
@@ -32,7 +32,7 @@ high_score = 0
 file_prefix = 'pacmanDQL - light'
 
 pbar = tqdm(total=EPISODES, desc='Episodes', position=0)
-initial_learning_rate = 1e-3
+initial_learning_rate = 1e-2
 decay_rate = 0.1  # adjust this value as per your needs
 decay_steps = 200  # adjust this value as per your needs
 
