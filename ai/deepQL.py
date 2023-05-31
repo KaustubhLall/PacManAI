@@ -10,7 +10,7 @@ from ai.environments.deepql_env import DQNAgent, PacmanEnv
 CHECKPOINT_DIR = './DQL/checkpoints'
 REPLAY_DIR = './DQL/replays'
 EPISODES = 10000
-TARGET_UPDATE_INTERVAL = 10
+TARGET_UPDATE_INTERVAL = 3
 CHECKPOINT_INTERVAL = 100
 
 # Make the directories if they do not exist
@@ -23,11 +23,11 @@ grid_width = 28
 num_channels = 5
 num_extra_features = 6
 agent = DQNAgent((grid_height, grid_width), num_channels, num_extra_features, actions, )
-# agent.load('C:/Users/kaus/PycharmProjects/PacManAI/ai/DQL/checkpoints/pacmanDQL - 2023-05-29/score-38')
+# agent.load('C:/Users/spide/PycharmProjects/PacManAI/ai/DQL/checkpoints/pacmanDQL - 2023-05-31/score-23-ep-9700')
 batch_size = 1
-env = PacmanEnv('../mazes/1.txt', pacman_lives=3, ghost_difficulty=3)
+env = PacmanEnv('../mazes/1.txt', pacman_lives=2, ghost_difficulty=3)
 high_score = 0
-file_prefix = 'pacmanDQL'
+file_prefix = 'pacmanDQL - light'
 
 pbar = tqdm(total=EPISODES, desc='Episodes', position=0)
 

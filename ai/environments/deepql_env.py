@@ -17,9 +17,7 @@ EPSILON = 1e-5  # small constant to prevent division by zero
 MAX_GHOST_PENALTY = 1  # This value might need to be adjusted based on your observations
 
 
-# todo implement double Q-learning
-# todo switch to prioritized experience replay
-
+# todo experiment with hidden architecture
 class SumTree:
     write = 0
 
@@ -86,8 +84,8 @@ class PacmanEnv:
         self.game_logic = None
         self.prev_score = 0
         self.reset()
-        self.ghost_distance_threshold = 12
-        self.pellet_distance_threshold = 7
+        self.ghost_distance_threshold = 10
+        self.pellet_distance_threshold = 5
         self.prev_lives = pacman_lives
 
     def get_distance(self, start, end):
@@ -149,7 +147,7 @@ class PacmanEnv:
                 ghost_penalty -= penalty  # Subtract penalty to introduce the danger of ghosts
 
         # Combine rewards
-        reward = ghost_penalty + pellet_reward + lives_penalty * 3
+        reward = ghost_penalty * 0.8 + pellet_reward + lives_penalty * 5
 
         reward_info = {
             'score_reward': score_reward,
@@ -192,7 +190,7 @@ class PacmanEnv:
     def render(self):
         sep = '='
         return f'{sep * 128}\nScore: {self.game_state.pacman.score}, Lives: {self.game_state.pacman.lives}\n' \
-               + print_board(self.game_state)
+            + print_board(self.game_state)
 
 
 class DQNAgent:
@@ -202,14 +200,14 @@ class DQNAgent:
         self.num_extra_features = num_extra_features
         self.action_size = len(actions)
         self.actions = actions
-        self.memory = SumTree(25000)  # Experience replay memory with SumTree
-        self.epsilon = 0.01  # small epsilon to ensure no zero priority
-        self.alpha = 0.2  # control how much prioritization is used
+        self.memory = SumTree(50000)  # Experience replay memory with SumTree
+        self.eps = 0.01  # small epsilon to ensure no zero priority
+        self.alpha = 0.4  # control how much prioritization is used
         self.gamma = 0.95  # Discount factor
         self.epsilon = 1.0  # Exploration rate
         self.epsilon_min = 0.2  # 0.01 default
-        self.epsilon_decay = 0.999
-        self.lr = 5e-5
+        self.epsilon_decay = 0.995
+        self.lr = 1e-4
         self.absolute_error_upper = 1.
 
         self.model = self._build_model()
@@ -224,13 +222,13 @@ class DQNAgent:
         extra_input = Input(shape=(self.num_extra_features,))
 
         # Convolution layers with batch normalization
-        act_fn = 'selu'
-        conv = Conv2D(16 * 2, kernel_size=3, activation=act_fn, padding='same')(grid_input)
-        conv = BatchNormalization()(conv)
-        conv = Conv2D(32 * 2, kernel_size=3, activation=act_fn, padding='same')(conv)
-        conv = BatchNormalization()(conv)
-        conv = Conv2D(64 * 2, kernel_size=3, activation=act_fn, padding='same')(conv)
-        conv = BatchNormalization()(conv)
+        act_fn = 'relu'
+        conv = Conv2D(16//2, kernel_size=2, activation=act_fn, padding='same')(grid_input)
+        # conv = BatchNormalization()(conv)
+        conv = Conv2D(32//2, kernel_size=3, activation=act_fn, padding='same')(conv)
+        # conv = BatchNormalization()(conv)
+        conv = Conv2D(64//2, kernel_size=5, activation=act_fn, padding='same')(conv)
+        # conv = BatchNormalization()(conv)
 
         flat = Flatten()(conv)
 
@@ -238,20 +236,17 @@ class DQNAgent:
         concat = Concatenate()([flat, extra_input])
 
         # Fully connected layers with batch normalization and dropout
-        hidden = Dense(256, activation=act_fn)(concat)
+        hidden = Dense(128, activation=act_fn)(concat)
         hidden = BatchNormalization()(hidden)
-        hidden = Dropout(0.2)(hidden)
+        # hidden = Dropout(0.2)(hidden)
         hidden = Dense(64, activation=act_fn)(hidden)
         hidden = BatchNormalization()(hidden)
-        hidden = Dropout(0.2)(hidden)
-        hidden = Dense(32, activation=act_fn)(hidden)
-        hidden = BatchNormalization()(hidden)
-        hidden = Dropout(0.2)(hidden)
+        # hidden = Dropout(0.2)(hidden)
 
         # Dueling DQN architecture
         # Split into value and advantage streams
-        hidden1 = Dense(32, activation=act_fn)(hidden)
-        hidden2 = Dense(128, activation=act_fn)(hidden)
+        hidden1 = Dense(16, activation=act_fn)(hidden)
+        hidden2 = Dense(5*16, activation=act_fn)(hidden)
         state_value = Dense(1)(hidden1)
         action_advantages = Dense(self.action_size)(hidden2)
 

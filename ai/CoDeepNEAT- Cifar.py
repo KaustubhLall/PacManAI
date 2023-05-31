@@ -21,7 +21,7 @@ def runCoDeepNEAT(_,
                   max_fitness=None,
                   config_file_path='./cifar-10-example.cfg',
                   backup_dir_path='./tfne_state_backups/',
-                  max_generations=4,
+                  max_generations=100,
                   epochs_tuning=200, ):
     """
     This Example evolves a CoDeepNEAT population on the CIFAR10 dataset for 72 generations. Subsequently the best
