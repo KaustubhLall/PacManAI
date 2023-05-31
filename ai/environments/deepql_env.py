@@ -167,12 +167,11 @@ class DQNAgent:
         self.num_extra_features = num_extra_features
         self.action_size = len(actions)
         self.actions = actions
-        self.memory = SumTree(25000)  # Experience replay memory with SumTree
-        self.epsilon = 0.01  # small epsilon to ensure no zero priority
+        self.memory = SumTree(75000)  # Experience replay memory with SumTree
         self.alpha = 0.95  # control how much prioritization is used
         self.gamma = 0.6  # Discount factor
         self.epsilon = 1.0  # Exploration rate
-        self.epsilon_min = 0.2  # 0.01 default
+        self.epsilon_min = 0.05  # 0.01 default
         self.epsilon_decay = 0.9
         self.lr = 1e-3
         self.absolute_error_upper = 1.
