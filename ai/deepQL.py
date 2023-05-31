@@ -32,7 +32,7 @@ high_score = 0
 file_prefix = 'pacmanDQL'
 
 pbar = tqdm(total=EPISODES, desc='Episodes', position=0)
-initial_learning_rate = 1e-3
+initial_learning_rate = 1e-2
 decay_rate = 0.1  # adjust this value as per your needs
 decay_steps = 200  # adjust this value as per your needs
 

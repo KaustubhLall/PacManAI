@@ -35,7 +35,7 @@ class PacmanEnv:
         self.time_alive = 0
         self.time_since_last_pellet = 5  # Initialize to a larger value
         self.ghost_distance_threshold = 15
-        self.pellet_distance_threshold = 10
+        self.pellet_distance_threshold = 5
         self.reset()
 
     def get_distance(self, start, end):
@@ -109,7 +109,8 @@ class PacmanEnv:
             time_since_last_pellet_penalty = self.time_since_last_pellet / 5  # Normalize penalty
 
         # Combine rewards
-        reward = ghost_penalty * 2 + pellet_reward + lives_penalty * 3 + time_alive_reward - time_since_last_pellet_penalty
+        reward = ghost_penalty * 4 + pellet_reward + lives_penalty * 10 + time_alive_reward - \
+                 time_since_last_pellet_penalty + score_reward
 
         reward_info = {
             'score_reward': score_reward,
@@ -172,7 +173,7 @@ class DQNAgent:
         self.gamma = 0.6  # Discount factor
         self.epsilon = 1.0  # Exploration rate
         self.epsilon_min = 0.2  # 0.01 default
-        self.epsilon_decay = 0.999
+        self.epsilon_decay = 0.9
         self.lr = 1e-3
         self.absolute_error_upper = 1.
 
@@ -276,7 +277,9 @@ class DQNAgent:
             tensorboard_callback = TensorBoard(log_dir=log_dir, histogram_freq=1)
 
             self.model.fit([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]], target_f, epochs=1,
-                           verbose=VERBOSITY, callbacks=[tensorboard_callback])
+                           verbose=VERBOSITY,
+                           # callbacks=[tensorboard_callback]
+                           )
 
             self.memory.update(idx, abs(target - target_f[0][action_index]))
 
