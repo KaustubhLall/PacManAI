@@ -22,7 +22,7 @@ os.makedirs(REPLAY_DIR, exist_ok=True)
 actions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 grid_height = 31
 grid_width = 28
-num_channels = 5
+num_channels = 1
 num_extra_features = 8
 agent = DQNAgent((grid_height, grid_width), num_channels, num_extra_features, actions, )
 # agent.load('C:/Users/kaus/PycharmProjects/PacManAI/ai/DQL/checkpoints/pacmanDQL - 2023-05-29/score-38')
