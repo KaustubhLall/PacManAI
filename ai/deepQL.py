@@ -2,6 +2,8 @@ import os
 import pickle
 from datetime import datetime
 
+from keras import backend as K
+from keras.callbacks import LearningRateScheduler
 from tqdm import tqdm
 
 from ai.environments.deepql_env import DQNAgent, PacmanEnv
@@ -21,7 +23,7 @@ actions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 grid_height = 31
 grid_width = 28
 num_channels = 5
-num_extra_features = 6
+num_extra_features = 8
 agent = DQNAgent((grid_height, grid_width), num_channels, num_extra_features, actions, )
 # agent.load('C:/Users/spide/PycharmProjects/PacManAI/ai/DQL/checkpoints/pacmanDQL - 2023-05-31/score-23-ep-9700')
 batch_size = 1
@@ -30,6 +32,16 @@ high_score = 0
 file_prefix = 'pacmanDQL - light'
 
 pbar = tqdm(total=EPISODES, desc='Episodes', position=0)
+initial_learning_rate = 1e-3
+decay_rate = 0.1  # adjust this value as per your needs
+decay_steps = 200  # adjust this value as per your needs
+
+
+def lr_scheduler(epoch):
+    return initial_learning_rate * decay_rate ** (epoch / decay_steps)
+
+
+lr_schedule = LearningRateScheduler(lr_scheduler)
 
 for e in range(EPISODES):
     state = env.reset()
@@ -75,6 +87,7 @@ for e in range(EPISODES):
 
     if e % TARGET_UPDATE_INTERVAL == 0:
         agent.update_target_model()
+        K.set_value(agent.model.optimizer.lr, lr_scheduler(e))
 
     # Update the progress bar
     pbar.update(1)

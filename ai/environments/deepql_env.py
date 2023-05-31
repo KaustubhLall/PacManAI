@@ -4,7 +4,8 @@ from datetime import datetime
 
 import numpy as np
 from keras import backend as K
-from keras.layers import Input, Dense, Flatten, Conv2D, Concatenate, BatchNormalization, Dropout, Lambda
+from keras.callbacks import TensorBoard
+from keras.layers import Input, Dense, Flatten, Conv2D, Concatenate, BatchNormalization, Lambda, Add
 from keras.models import Model
 from keras.optimizers import Nadam
 
@@ -84,9 +85,12 @@ class PacmanEnv:
         self.game_logic = None
         self.prev_score = 0
         self.reset()
-        self.ghost_distance_threshold = 10
-        self.pellet_distance_threshold = 5
         self.prev_lives = pacman_lives
+        self.time_alive = 0
+        self.time_since_last_pellet = 5  # Initialize to a larger value
+        self.ghost_distance_threshold = 10
+        self.pellet_distance_threshold = 10
+        self.reset()
 
     def get_distance(self, start, end):
         visited = np.zeros((self.game_state.board_height, self.game_state.board_width))
@@ -141,19 +145,33 @@ class PacmanEnv:
                 (ghost.x, ghost.y)
             )
             if distance < self.ghost_distance_threshold:
-                # Calculate penalty as a scaled logarithmic function
                 penalty = np.log(self.ghost_distance_threshold) - np.log(distance + EPSILON)
-                penalty = penalty / np.log(self.ghost_distance_threshold)  # Normalize to 0-1 range
-                ghost_penalty -= penalty  # Subtract penalty to introduce the danger of ghosts
+                penalty = penalty / np.log(self.ghost_distance_threshold)
+                ghost_penalty -= penalty
+
+        time_alive_reward = 0.01
+        if self.prev_lives == current_lives:  #
+            self.time_alive += 1
+            time_alive_reward = self.time_alive / 200
+
+            # Calculate time since last pellet was eaten
+        if current_score > self.prev_score:
+            time_since_last_pellet_penalty = 0
+            self.time_since_last_pellet = 0
+        else:
+            self.time_since_last_pellet += 1
+            time_since_last_pellet_penalty = self.time_since_last_pellet / 5  # Normalize penalty
 
         # Combine rewards
-        reward = ghost_penalty * 0.8 + pellet_reward + lives_penalty * 5
+        reward = ghost_penalty + pellet_reward + lives_penalty * 3 + time_alive_reward - time_since_last_pellet_penalty
 
         reward_info = {
             'score_reward': score_reward,
             'ghost_penalty': ghost_penalty,
             'pellet_reward': pellet_reward,
             'lives_penalty': lives_penalty,
+            'time_alive_reward': time_alive_reward,
+            'time_since_last_pellet_penalty': time_since_last_pellet_penalty,
             'total_reward': reward
         }
 
@@ -168,6 +186,8 @@ class PacmanEnv:
         self.game_state = GameState(self.filename, self.pacman_lives, self.ghost_difficulty)
         self.game_logic = GameLogic(self.game_state)
         self.prev_score = 0
+        self.time_alive = 0
+        self.time_since_last_pellet = 20
         return self.game_state.get_encoding_ql(), self._get_extra_features()
 
     def _get_extra_features(self):
@@ -177,15 +197,15 @@ class PacmanEnv:
         closest_pellet = min(self.game_state.pellets,
                              key=lambda p: abs(p.x - self.game_state.pacman.x) + abs(p.y - self.game_state.pacman.y))
         self.closest_pellet = closest_pellet
-        # Calculate relative positions
-        dx_ghost = closest_ghost.x - self.game_state.pacman.x
-        dy_ghost = closest_ghost.y - self.game_state.pacman.y
-
-        dx_pellet = closest_pellet.x - self.game_state.pacman.x
-        dy_pellet = closest_pellet.y - self.game_state.pacman.y
+        # Calculate relative directions (opposite of dx, dy)
+        dir_ghost = (np.sign(self.game_state.pacman.x - closest_ghost.x),
+                     np.sign(self.game_state.pacman.y - closest_ghost.y))
+        dir_pellet = (np.sign(self.game_state.pacman.x - closest_pellet.x),
+                      np.sign(self.game_state.pacman.y - closest_pellet.y))
 
         return np.array([self.game_state.pacman.lives, self.game_state.pacman.score,
-                         dx_ghost, dy_ghost, dx_pellet, dy_pellet])
+                         dir_ghost[0], dir_ghost[1], dir_pellet[0], dir_pellet[1],
+                         self.time_alive / 1000, self.time_since_last_pellet / 100])  # Normalize time features
 
     def render(self):
         sep = '='
@@ -200,14 +220,14 @@ class DQNAgent:
         self.num_extra_features = num_extra_features
         self.action_size = len(actions)
         self.actions = actions
-        self.memory = SumTree(50000)  # Experience replay memory with SumTree
-        self.eps = 0.01  # small epsilon to ensure no zero priority
-        self.alpha = 0.4  # control how much prioritization is used
-        self.gamma = 0.95  # Discount factor
+        self.memory = SumTree(75000)  # Experience replay memory with SumTree
+        self.epsilon = 0.01  # small epsilon to ensure no zero priority
+        self.alpha = 0.95  # control how much prioritization is used
+        self.gamma = 0.6  # Discount factor
         self.epsilon = 1.0  # Exploration rate
         self.epsilon_min = 0.2  # 0.01 default
-        self.epsilon_decay = 0.995
-        self.lr = 1e-4
+        self.epsilon_decay = 0.999
+        self.lr = 1e-3
         self.absolute_error_upper = 1.
 
         self.model = self._build_model()
@@ -221,32 +241,50 @@ class DQNAgent:
         grid_input = Input(shape=(self.grid_size[0], self.grid_size[1], self.num_channels))
         extra_input = Input(shape=(self.num_extra_features,))
 
-        # Convolution layers with batch normalization
+        # Convolution layers with batch normalization and Residual Connections
         act_fn = 'relu'
-        conv = Conv2D(16//2, kernel_size=2, activation=act_fn, padding='same')(grid_input)
-        # conv = BatchNormalization()(conv)
-        conv = Conv2D(32//2, kernel_size=3, activation=act_fn, padding='same')(conv)
-        # conv = BatchNormalization()(conv)
-        conv = Conv2D(64//2, kernel_size=5, activation=act_fn, padding='same')(conv)
-        # conv = BatchNormalization()(conv)
 
-        flat = Flatten()(conv)
+        conv1 = Conv2D(16, kernel_size=3, activation=act_fn, padding='same')(grid_input)
+        conv1 = BatchNormalization()(conv1)
+
+        conv2 = Conv2D(16, kernel_size=3, activation=act_fn, padding='same')(conv1)
+        conv2 = BatchNormalization()(conv2)
+
+        residual1 = Add()([conv1, conv2])
+
+        conv3 = Conv2D(32, kernel_size=3, activation=act_fn, padding='same')(residual1)
+        conv3 = BatchNormalization()(conv3)
+
+        conv4 = Conv2D(32, kernel_size=3, activation=act_fn, padding='same')(conv3)
+        conv4 = BatchNormalization()(conv4)
+
+        residual2 = Add()([conv3, conv4])
+
+        conv5 = Conv2D(64, kernel_size=3, activation=act_fn, padding='same')(residual2)
+        conv5 = BatchNormalization()(conv5)
+
+        conv6 = Conv2D(64, kernel_size=3, activation=act_fn, padding='same')(conv5)
+        conv6 = BatchNormalization()(conv6)
+
+        residual3 = Add()([conv5, conv6])
+
+        flat = Flatten()(residual3)
 
         # Concatenation with extra features
         concat = Concatenate()([flat, extra_input])
 
-        # Fully connected layers with batch normalization and dropout
-        hidden = Dense(128, activation=act_fn)(concat)
+        # Fully connected layers with batch normalization
+        hidden = Dense(256, activation=act_fn)(concat)
         hidden = BatchNormalization()(hidden)
-        # hidden = Dropout(0.2)(hidden)
         hidden = Dense(64, activation=act_fn)(hidden)
         hidden = BatchNormalization()(hidden)
-        # hidden = Dropout(0.2)(hidden)
+        hidden = Dense(32, activation=act_fn)(hidden)
+        hidden = BatchNormalization()(hidden)
 
         # Dueling DQN architecture
         # Split into value and advantage streams
-        hidden1 = Dense(16, activation=act_fn)(hidden)
-        hidden2 = Dense(5*16, activation=act_fn)(hidden)
+        hidden1 = Dense(32, activation=act_fn)(hidden)
+        hidden2 = Dense(128, activation=act_fn)(hidden)
         state_value = Dense(1)(hidden1)
         action_advantages = Dense(self.action_size)(hidden2)
 
@@ -307,8 +345,13 @@ class DQNAgent:
                                           verbose=VERBOSITY)
             action_index = self.actions.index(action)  # find the index of action
             target_f[0][action_index] = target  # update target at index of action
+
+            log_dir = "logs/fit/" + datetime.now().strftime("%Y%m%d-%H%M%S")
+            tensorboard_callback = TensorBoard(log_dir=log_dir, histogram_freq=1)
+
             self.model.fit([grid_state[np.newaxis, ...], extra_features[np.newaxis, ...]], target_f, epochs=1,
-                           verbose=VERBOSITY)
+                           verbose=VERBOSITY, callbacks=[tensorboard_callback])
+
             self.memory.update(idx, abs(target - target_f[0][action_index]))
 
         if self.epsilon > self.epsilon_min:
@@ -346,7 +389,7 @@ class DQNAgent:
 
         # Save the model weights and architecture
         if final:
-            self.model.save(name + '.h5')  # Saves both weights and architecture
+            self.model.save(name + '.h5')
         else:
             self.model.save_weights(name + '_weights.h5')
 

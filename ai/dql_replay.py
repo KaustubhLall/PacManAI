@@ -20,21 +20,8 @@ env.reset()
 for state, action in zip(replay_states, replay_actions):
     _, reward, _, reward_info = env.step(action)
     print(env.render())  # Display the game state
-    try: print("Score Reward:", reward_info['score_reward'], end=' | ');
-    except:
-        ...
-    try: print("Ghost Penalty:", reward_info['ghost_penalty'], end=' | ');
-    except:
-        ...
-    try: print("Pellet Reward:", reward_info['pellet_reward'], end=' | ');
-    except:
-        ...
-    try: print("Lives Penalty:", reward_info['lives_penalty'], end=' | ');
-    except:
-        ...
-    try: print("Total Reward (Ghost+Pellet):", reward_info['total_reward']);
-    except:
-        ...
+    for title, info in reward_info.items():
+        print(f"{title.replace('_', ' ').title()}:", f"{info:4.2f}", end=' | ')
     i = input('press any to continue (n to terminate)...')
     if i == 'n':
         break
