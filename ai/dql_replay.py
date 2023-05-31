@@ -4,7 +4,7 @@ from ai.environments.deepql_env import PacmanEnv
 
 # Load the replay data
 # Replace with your replay file below
-replay_file = 'C:/Users/kaus/PycharmProjects/PacManAI/ai/DQL/replays/pacmanDQL - 2023-05-30/score-10 ep 200-replay.pkl'
+replay_file = 'C:/Users/kaus/PycharmProjects/PacManAI/ai/DQL/replays/pacmanDQL - 2023-05-31/score-28 -replay.pkl'
 with open(replay_file, 'rb') as f:
     replay_states, replay_actions = pickle.load(f)
 
@@ -18,21 +18,8 @@ env.reset()
 for state, action in zip(replay_states, replay_actions):
     _, reward, _, reward_info = env.step(action)
     print(env.render())  # Display the game state
-    try: print("Score Reward:", reward_info['score_reward'], end=' | ');
-    except:
-        ...
-    try: print("Ghost Penalty:", reward_info['ghost_penalty'], end=' | ');
-    except:
-        ...
-    try: print("Pellet Reward:", reward_info['pellet_reward'], end=' | ');
-    except:
-        ...
-    try: print("Lives Penalty:", reward_info['lives_penalty'], end=' | ');
-    except:
-        ...
-    try: print("Total Reward (Ghost+Pellet):", reward_info['total_reward']);
-    except:
-        ...
+    for title, info in reward_info.items():
+        print(f"{title.replace('_', ' ').title()}:", f"{info:4.2f}", end=' | ')
     i = input('press any to continue (n to terminate)...')
     if i == 'n':
         break
