@@ -1,6 +1,6 @@
 # PacManAI
 
-Welcome to PacManAI, where the timeless arcade classic meets modern artificial intelligence. Our project is at the forefront of developing sophisticated AI agents capable of navigating the mazes and challenges of Pac-Man with unparalleled strategy and skill.
+Welcome to PacManAI, where the timeless arcade classic meets modern artificial intelligence. My project is at the forefront of developing sophisticated AI agents capable of navigating the mazes and challenges of Pac-Man with unparalleled strategy and skill.
 
 ## Features
 
