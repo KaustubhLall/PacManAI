@@ -23,6 +23,7 @@ CONFIG = {
     'font_size': 36
 }
 
+
 class Button:
     def __init__(self, x, y, text, callback):
         self.x = x
@@ -44,33 +45,35 @@ class Button:
                self.y < mouse_pos[1] < self.y + CONFIG['button']['height']:
                 self.callback()
 
+
 class Display:
     def __init__(self, game_state):
         self.game_state = game_state
+        self.running = True
         pygame.init()
 
-        infoObject = pygame.display.Info()
-        self.screen_width = infoObject.current_w
-        self.screen_height = infoObject.current_h
+        info_object = pygame.display.Info()
+        screen_width = info_object.current_w
+        screen_height = info_object.current_h
 
-        self.cell_size = min(self.screen_width // game_state.board_width,
-                             self.screen_height // (game_state.board_height + 2))
+        self.cell_size = min(screen_width // game_state.board_width,
+                             screen_height // (game_state.board_height + 2))
+        self.window_width = game_state.board_width * self.cell_size
+        self.window_height = (game_state.board_height + 2) * self.cell_size
 
-        self.screen = pygame.display.set_mode(
-            (game_state.board_width * self.cell_size,
-             (game_state.board_height + 2) * self.cell_size))
-
-        toolbar_width = self.screen_width
-        toolbar_height = 60
-        self.toolbar_rect = pygame.Rect(0, 0, toolbar_width, toolbar_height)
+        self.screen = pygame.display.set_mode((self.window_width, self.window_height))
+        pygame.display.set_caption("PacManAI")
 
         self.buttons = [
             Button(10, 10, "Easy", lambda: self.change_difficulty(0)),
             Button(170, 10, "Medium", lambda: self.change_difficulty(1)),
             Button(330, 10, "Hard", lambda: self.change_difficulty(2)),
             Button(490, 10, "Insane", lambda: self.change_difficulty(3)),
-            Button(self.screen_width - 160, 10, "Exit", pygame.quit)
+            Button(max(10, self.window_width - 160), 10, "Exit", self.request_exit)
         ]
+
+    def request_exit(self):
+        self.running = False
 
     def change_difficulty(self, difficulty):
         for ghost in self.game_state.ghosts:
@@ -91,7 +94,7 @@ class Display:
             pygame.draw.circle(self.screen, CONFIG['colors']['pellet'],
                                (pellet.x * self.cell_size + self.cell_size // 2,
                                 (pellet.y + 2) * self.cell_size + self.cell_size // 2),
-                               self.cell_size // 4)
+                               max(2, self.cell_size // 4))
 
         if self.game_state.pacman:
             rect = pygame.Rect(self.game_state.pacman.x * self.cell_size,
@@ -104,8 +107,8 @@ class Display:
                                self.cell_size, self.cell_size)
             pygame.draw.ellipse(self.screen, CONFIG['colors']['ghost'], rect)
 
-        self.draw_text('Score', self.game_state.pacman.score, (800, 10))
-        self.draw_text('Lives', self.game_state.pacman.lives, (800, 50))
+        self.draw_text('Score', self.game_state.pacman.score, (self.window_width - 10, 10))
+        self.draw_text('Lives', self.game_state.pacman.lives, (self.window_width - 10, 50))
 
         for button in self.buttons:
             button.draw(self.screen)
@@ -119,11 +122,12 @@ class Display:
         text_rect.topright = pos
         self.screen.blit(text, text_rect)
 
-
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit()
+                self.request_exit()
 
             for button in self.buttons:
                 button.handle_click(event)
+
+        return self.running
