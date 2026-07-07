@@ -21,10 +21,10 @@ ai/environments/   RL environment wrappers and replay data structures
 game/               Pac-Man game state, rules, renderer, and input handling
 mazes/              Text-file maze definitions
 pytorch_neat/       Imported/experimental PyTorch NEAT utilities
-tests/              Regression tests for game-state behavior
+tests/              Regression tests for game-state behavior and replay data structures
 ```
 
-> Note: `pytorch_neat/` appears to be exploratory/vendor-style research code. The maintained path for this project is currently the `game/` package plus `ai/ai_neat.py`.
+> Note: `pytorch_neat/` appears to be exploratory/vendor-style research code. The maintained path for this project is currently the `game/` package plus the explicit training CLIs in `ai/`.
 
 ## Setup
 
@@ -76,13 +76,38 @@ python -m ai.ai_neat --config-file ai/neat.cfg --generations 100
 
 `ai/neat.cfg` is currently matched to `mazes/2.txt`, which is a 32×32 board. The NEAT input size is the flattened board encoding plus Pac-Man's normalized `(x, y)` coordinates.
 
+## Train the experimental DQN agent
+
+Install the ML extras first:
+
+```bash
+pip install -r requirements-ml.txt
+```
+
+Run a short smoke training job:
+
+```bash
+python -m ai.deepQL --episodes 5 --max-steps 250 --checkpoint-interval 5
+```
+
+Longer runs write checkpoints, metadata, and replay files under `runs/dqn/`, which is intentionally ignored by git.
+
+Useful options:
+
+```bash
+python -m ai.deepQL --maze-file mazes/1.txt --episodes 100 --batch-size 32 --seed 7
+python -m ai.deepQL --load-checkpoint runs/dqn/checkpoints/<run>/score-12-ep-100
+```
+
+The DQN path is still experimental. It is now safe to import and has a real CLI, but model quality is not yet benchmarked.
+
 ## Test
 
 ```bash
 python -m pytest
 ```
 
-The regression tests currently cover the most important environment correctness issues: reset behavior, dynamic encodings, pellet removal, and game-over semantics.
+The regression tests currently cover the most important environment correctness issues: reset behavior, dynamic encodings, pellet removal, game-over semantics, and prioritized replay bookkeeping.
 
 ## Current limitations
 
