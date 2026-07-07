@@ -74,7 +74,7 @@ class GameLogic:
                 self._check_ghost_collision(ghost)
 
             # Check for pellet collision
-            for pellet in self.game_state.pellets:
+            for pellet in list(self.game_state.pellets):
                 if next_x == pellet.x and next_y == pellet.y:
                     self.game_state.pacman.score += 1
                     self.game_state.remove_pellet(pellet)
@@ -87,7 +87,7 @@ class GameLogic:
             next_y = (ghost.y + dy) % self.game_state.board_height
 
             # Check for collision with walls and other ghosts
-            if not self._is_valid_cell(next_x, next_y) or self._is_collision_with_ghosts(next_x, next_y):
+            if not self._is_valid_cell(next_x, next_y) or self._is_collision_with_ghosts(next_x, next_y, ignore=ghost):
                 continue
 
             ghost.move(dx, dy)
@@ -98,12 +98,14 @@ class GameLogic:
 
             self._check_ghost_collision(ghost)
 
-    def _is_collision_with_ghosts(self, x, y):
+    def _is_collision_with_ghosts(self, x, y, ignore=None):
         # Wrap coordinates
         x = x % self.game_state.board_width
         y = y % self.game_state.board_height
 
         for ghost in self.game_state.ghosts:
+            if ghost is ignore:
+                continue
             if x == ghost.x and y == ghost.y:
                 return True
         return False
@@ -124,18 +126,22 @@ class GameLogic:
 
     # GHOST AI
     def _ghost_next_move(self, ghost):
-        if ghost.difficulty == 0:
-            return 0, 0  # static ghost, does not move
-        elif ghost.difficulty == 1:
-            return self.alg_dbfs(ghost)  # randomly moving ghost
-        elif ghost.difficulty == 2:
-            return self.alg_dfs(ghost, max_depth=15)  # dfs-based ghost
-        elif ghost.difficulty == 3:
-            return self.alg_a_star(ghost)
+        try:
+            if ghost.difficulty == 0:
+                return 0, 0  # static ghost, does not move
+            elif ghost.difficulty == 1:
+                return self.alg_dbfs(ghost)  # greedy move toward Pac-Man
+            elif ghost.difficulty == 2:
+                return self.alg_dfs(ghost, max_depth=15)  # dfs-based ghost
+            elif ghost.difficulty == 3:
+                return self.alg_a_star(ghost)
+        except ValueError:
+            moves = self.get_next_moves(ghost.x, ghost.y)
+            return choice(moves) if moves else (0, 0)
         return 0, 0  # default, does not move
 
     def get_next_moves(self, x, y):
-        directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]  # right, down, left, up
+        directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]  # down, right, up, left
         next_moves = []
 
         for dx, dy in directions:
@@ -212,7 +218,7 @@ class GameLogic:
         pacman_x, pacman_y = self.game_state.pacman.x, self.game_state.pacman.y
 
         # Check current direction towards pacman
-        direction = (np.sign(pacman_x - ghost.x), np.sign(pacman_y - ghost.y))
+        direction = (int(np.sign(pacman_x - ghost.x)), int(np.sign(pacman_y - ghost.y)))
 
         # Get valid moves
         moves = self.get_next_moves(ghost.x, ghost.y)
