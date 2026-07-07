@@ -1,0 +1,5 @@
+numpy>=1.23
+pygame>=2.5
+neat-python>=0.92
+tqdm>=4.66
+pytest>=8.0
