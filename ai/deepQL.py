@@ -1,93 +1,175 @@
-import os
-import pickle
-from datetime import datetime
+"""Command-line training loop for the experimental Deep Q-Learning agent.
 
-from keras import backend as K
-from keras.callbacks import LearningRateScheduler
+The original version of this module started a 10,000-episode training run at
+import time. Keeping training behind a `main()` guard makes the module safer to
+import, easier to test, and friendlier for portfolio review.
+"""
+
+import argparse
+import pickle
+import random
+from datetime import datetime
+from pathlib import Path
+
+import numpy as np
 from tqdm import tqdm
 
-from ai.environments.deepql_env import DQNAgent, PacmanEnv
-
-# Define the directories for checkpoints and replays
-CHECKPOINT_DIR = './DQL/checkpoints'
-REPLAY_DIR = './DQL/replays'
-EPISODES = 10000
-TARGET_UPDATE_INTERVAL = 3
-CHECKPOINT_INTERVAL = 100
-
-# Make the directories if they do not exist
-os.makedirs(CHECKPOINT_DIR, exist_ok=True)
-os.makedirs(REPLAY_DIR, exist_ok=True)
-
-actions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
-grid_height = 31
-grid_width = 28
-num_channels = 1
-num_extra_features = 8
-agent = DQNAgent((grid_height, grid_width), num_channels, num_extra_features, actions, )
-# agent.load('C:/Users/spide/PycharmProjects/PacManAI/ai/DQL/checkpoints/pacmanDQL - 2023-05-31/score-23-ep-9700')
-batch_size = 1
-env = PacmanEnv('../mazes/1.txt', pacman_lives=2, ghost_difficulty=3)
-high_score = 0
-file_prefix = 'pacmanDQL - light'
-
-pbar = tqdm(total=EPISODES, desc='Episodes', position=0)
-initial_learning_rate = 1e-2
-decay_rate = 0.1  # adjust this value as per your needs
-decay_steps = 200  # adjust this value as per your needs
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_MAZE = PROJECT_ROOT / "mazes" / "1.txt"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "runs" / "dqn"
+DEFAULT_ACTIONS = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 
 
-def lr_scheduler(epoch):
+def lr_scheduler(epoch, initial_learning_rate=1e-2, decay_rate=0.1, decay_steps=200):
     return initial_learning_rate * decay_rate ** (epoch / decay_steps)
 
 
-lr_schedule = LearningRateScheduler(lr_scheduler)
+def _set_learning_rate(agent, learning_rate, keras_backend):
+    optimizer = agent.model.optimizer
+    lr_var = getattr(optimizer, "learning_rate", None) or getattr(optimizer, "lr", None)
+    if lr_var is None:
+        return
 
-for e in range(EPISODES):
-    state = env.reset()
-    done = False
-    # Initialize the lists to store states and actions for the replay
-    replay_states = []
-    replay_actions = []
+    if hasattr(lr_var, "assign"):
+        lr_var.assign(learning_rate)
+    else:
+        keras_backend.set_value(lr_var, learning_rate)
 
-    while not done:
-        action = agent.act(state)
-        # Append the state and action to the replay lists
-        replay_states.append(state)
-        replay_actions.append(action)
-        next_state, reward, done, r_info = env.step(action)
-        agent.remember(state, action, reward, next_state, done, r_info)
-        state = next_state
-        if done:
+
+def _set_seed(seed):
+    if seed is None:
+        return
+
+    random.seed(seed)
+    np.random.seed(seed)
+    try:
+        import tensorflow as tf
+        tf.random.set_seed(seed)
+    except ImportError:
+        pass
+
+
+def _save_replay(replay_path, replay_states, replay_actions):
+    replay_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(replay_path, "wb") as f:
+        pickle.dump((replay_states, replay_actions), f)
+
+
+def train_dqn(
+    maze_file=DEFAULT_MAZE,
+    output_dir=DEFAULT_OUTPUT_DIR,
+    episodes=100,
+    max_steps=2_000,
+    pacman_lives=2,
+    ghost_difficulty=3,
+    batch_size=32,
+    target_update_interval=3,
+    checkpoint_interval=100,
+    file_prefix="pacmanDQL-light",
+    seed=None,
+    load_checkpoint=None,
+):
+    """Train the DQN agent and return the best score observed."""
+    _set_seed(seed)
+
+    # Heavy ML imports are intentionally lazy so `python -m ai.deepQL --help`
+    # and plain module imports do not require TensorFlow/Keras to be installed.
+    from keras import backend as K
+
+    from ai.environments.deepql_env import DQNAgent, PacmanEnv
+
+    output_dir = Path(output_dir)
+    checkpoint_root = output_dir / "checkpoints"
+    replay_root = output_dir / "replays"
+    checkpoint_root.mkdir(parents=True, exist_ok=True)
+    replay_root.mkdir(parents=True, exist_ok=True)
+
+    env = PacmanEnv(str(maze_file), pacman_lives=pacman_lives, ghost_difficulty=ghost_difficulty)
+    grid_state, extra_features = env.reset()
+    agent = DQNAgent(
+        grid_size=grid_state.shape[:2],
+        num_channels=grid_state.shape[2],
+        num_extra_features=len(extra_features),
+        actions=DEFAULT_ACTIONS,
+        load=load_checkpoint,
+    )
+
+    high_score = 0
+    run_name = datetime.now().strftime(f"{file_prefix}-%Y-%m-%d")
+
+    with tqdm(total=episodes, desc="Episodes", position=0) as pbar:
+        for episode in range(episodes):
+            state = env.reset()
+            done = False
+            replay_states = []
+            replay_actions = []
+            reward_info = {}
+
+            for _step in range(max_steps):
+                action = agent.act(state)
+                replay_states.append(state)
+                replay_actions.append(action)
+
+                next_state, reward, done, reward_info = env.step(action)
+                agent.remember(state, action, reward, next_state, done, reward_info)
+                state = next_state
+
+                if done:
+                    break
+
             score = env.game_state.get_score()
-            chk = e % CHECKPOINT_INTERVAL == 0
-            if score > high_score or chk:
-                high_score = score if score > high_score else high_score
-                timestamp = datetime.now().strftime(f'{file_prefix} - %Y-%m-%d')
-                checkpoint_dir = os.path.join(CHECKPOINT_DIR, timestamp)
-                os.makedirs(checkpoint_dir, exist_ok=True)
-                checkpoint_path = os.path.join(checkpoint_dir, f'score-{score}' + (f'-ep-{e}' if chk else ''))
-                agent.save(checkpoint_path, score, e)
+            should_checkpoint = checkpoint_interval > 0 and episode % checkpoint_interval == 0
 
-                replay_dir = os.path.join(REPLAY_DIR, timestamp)
-                os.makedirs(replay_dir, exist_ok=True)
-                replay_path = os.path.join(replay_dir, f'score-{score} %s-replay.pkl' % (f'ep {e}' if chk else ''))
-                with open(replay_path, 'wb') as f:
-                    pickle.dump((replay_states, replay_actions), f)
+            if score > high_score or should_checkpoint:
+                high_score = max(score, high_score)
+                checkpoint_dir = checkpoint_root / run_name
+                checkpoint_dir.mkdir(parents=True, exist_ok=True)
+                checkpoint_path = checkpoint_dir / f"score-{score}" 
+                if should_checkpoint:
+                    checkpoint_path = checkpoint_dir / f"score-{score}-ep-{episode}"
+                agent.save(str(checkpoint_path), score, episode)
 
-                tqdm.write(f"Ep: {e}, Score: {score}, New High Score! Replay saved at: {replay_path}")
+                replay_path = replay_root / run_name / f"score-{score}-ep-{episode}-replay.pkl"
+                _save_replay(replay_path, replay_states, replay_actions)
+                tqdm.write(f"Ep: {episode}, Score: {score}, Replay saved at: {replay_path}")
             else:
-                tqdm.write(f"Ep: {e}, Score: {score}")
+                tqdm.write(f"Ep: {episode}, Score: {score}")
 
-            # Update the progress bar postfix with the current high score
-            pbar.set_postfix({"High Score": high_score}, refresh=True)
+            if len(agent.memory) >= batch_size:
+                agent.replay(batch_size)
 
-    if len(agent.memory) > batch_size:
-        agent.replay(batch_size)
+            if target_update_interval > 0 and episode % target_update_interval == 0:
+                agent.update_target_model()
+                _set_learning_rate(agent, lr_scheduler(episode), K)
 
-    if e % TARGET_UPDATE_INTERVAL == 0:
-        agent.update_target_model()
-        K.set_value(agent.model.optimizer.lr, lr_scheduler(e))
+            pbar.set_postfix({"High Score": high_score, **reward_info}, refresh=True)
+            pbar.update(1)
 
-    # Update the progress bar
-    pbar.update(1)
+    return high_score
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train the experimental DQN Pac-Man agent.")
+    parser.add_argument("--maze-file", type=Path, default=DEFAULT_MAZE, help="maze file used for training")
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR, help="directory for checkpoints/replays")
+    parser.add_argument("--episodes", type=int, default=100, help="number of training episodes")
+    parser.add_argument("--max-steps", type=int, default=2_000, help="maximum steps per episode")
+    parser.add_argument("--pacman-lives", type=int, default=2, help="Pac-Man lives per episode")
+    parser.add_argument("--ghost-difficulty", type=int, choices=range(4), default=3, help="ghost AI difficulty")
+    parser.add_argument("--batch-size", type=int, default=32, help="experience replay batch size")
+    parser.add_argument("--target-update-interval", type=int, default=3, help="episodes between target model syncs")
+    parser.add_argument("--checkpoint-interval", type=int, default=100, help="episodes between forced checkpoints")
+    parser.add_argument("--file-prefix", type=str, default="pacmanDQL-light", help="checkpoint/replay run prefix")
+    parser.add_argument("--seed", type=int, default=None, help="optional random seed")
+    parser.add_argument("--load-checkpoint", type=str, default=None, help="checkpoint path prefix to load")
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    high_score = train_dqn(**vars(args))
+    print(f"Training complete. High score: {high_score}")
+
+
+if __name__ == "__main__":
+    main()
