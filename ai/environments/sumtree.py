@@ -2,16 +2,21 @@ import numpy as np
 
 
 class SumTree:
-    write = 0
+    """Binary sum tree for prioritized replay sampling."""
 
     def __init__(self, capacity):
+        if capacity <= 0:
+            raise ValueError("capacity must be positive")
+
         self.capacity = capacity
         self.tree = np.zeros(2 * capacity - 1)
-        self.data = np.zeros(capacity, dtype=object)
+        self.data = np.empty(capacity, dtype=object)
+        self.data[:] = None
+        self.write = 0
+        self.n_entries = 0
 
     def _propagate(self, idx, change):
         parent = (idx - 1) // 2
-
         self.tree[parent] += change
 
         if parent != 0:
@@ -34,7 +39,6 @@ class SumTree:
 
     def add(self, p, data):
         idx = self.write + self.capacity - 1
-
         self.data[self.write] = data
         self.update(idx, p)
 
@@ -42,17 +46,20 @@ class SumTree:
         if self.write >= self.capacity:
             self.write = 0
 
+        self.n_entries = min(self.n_entries + 1, self.capacity)
+
     def update(self, idx, p):
         change = p - self.tree[idx]
-
         self.tree[idx] = p
         self._propagate(idx, change)
 
     def get(self, s):
-        idx = self._retrieve(0, s)
-        dataIdx = idx - self.capacity + 1
+        if self.n_entries == 0 or self.total() <= 0:
+            raise ValueError("cannot sample from an empty SumTree")
 
-        return (idx, self.tree[idx], self.data[dataIdx])
+        idx = self._retrieve(0, s)
+        data_idx = idx - self.capacity + 1
+        return idx, self.tree[idx], self.data[data_idx]
 
     def __len__(self):
-        return len(self.data)
+        return self.n_entries
